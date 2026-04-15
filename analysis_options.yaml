@@ -1,1 +1,5 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "*.dart" # Root-level files superseded by lib/ versions

@@ -1,0 +1,45 @@
+type User @table {
+  authId: String!
+  role: String!
+  username: String!
+  createdAt: Timestamp!
+  location: Vector @col(size: 2) # Representing a geographic point [latitude, longitude]
+  profileDescription: String
+}
+
+type Request @table {
+  beneficiary: User!
+  title: String!
+  description: String!
+  status: String!
+  createdAt: Timestamp!
+  location: Vector @col(size: 2) # Representing a geographic point [latitude, longitude]
+  category: String
+  urgency: String
+}
+
+type Offer @table {
+  donor: User!
+  request: Request!
+  status: String!
+  createdAt: Timestamp!
+  messageToBeneficiary: String
+}
+
+type Match @table {
+  donor: User!
+  beneficiary: User!
+  request: Request!
+  offer: Offer!
+  status: String!
+  createdAt: Timestamp!
+  completedAt: Timestamp
+}
+
+type Message @table {
+  match: Match!
+  sender: User!
+  content: String!
+  createdAt: Timestamp!
+  isRead: Boolean!
+}

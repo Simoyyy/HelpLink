@@ -1,46 +1,68 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection
+    // ── Helper functions ────────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // ── users ───────────────────────────────────────────────────────────────
+    // Any signed-in user can read profiles (needed for donor↔beneficiary display).
+    // Users can only write their own document.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isAuth();
+      allow create: if isAuth() && isOwner(userId);
+      allow update: if isAuth() && isOwner(userId);
       allow delete: if false;
     }
 
-    // Verification codes
-    match /verification_codes/{email} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Help requests
+    // ── help_requests ────────────────────────────────────────────────────────
+    // Any signed-in user can read (donors browse, beneficiaries view their own).
+    // Only beneficiaries can create (their own).
+    // Both parties can update (donor accepts/completes, beneficiary edits/cancels).
+    // Only the beneficiary can delete their own pending request.
     match /help_requests/{requestId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.beneficiaryId == request.auth.uid;
-      allow update: if request.auth != null
-        && (request.resource.data.beneficiaryId == request.auth.uid
-            || request.resource.data.donorId == request.auth.uid
-            || resource.data.status == 'pending');
-      allow delete: if request.auth != null
-        && resource.data.beneficiaryId == request.auth.uid;
+      allow read:   if isAuth();
+
+      allow create: if isAuth() &&
+        request.resource.data.beneficiaryId == request.auth.uid;
+
+      allow update: if isAuth() && (
+        resource.data.beneficiaryId == request.auth.uid ||
+        resource.data.donorId       == request.auth.uid ||
+        request.resource.data.donorId == request.auth.uid
+      );
+
+      allow delete: if isAuth() &&
+        resource.data.beneficiaryId == request.auth.uid;
     }
 
-    // Chat rooms
-    match /chat_rooms/{chatRoomId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid in resource.data.participants;
+    // ── messages ─────────────────────────────────────────────────────────────
+    // Any signed-in user can read (filtered in app by requestId).
+    // Only the sender can create their own messages.
+    // Messages are immutable once sent.
+    match /messages/{messageId} {
+      allow read:          if isAuth();
+      allow create:        if isAuth() &&
+        request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
 
-      // Allow creation (participants field doesn't exist yet)
-      allow create: if request.auth != null;
-
-      match /messages/{messageId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
-          && request.resource.data.senderId == request.auth.uid;
-      }
+    // ── feedbacks ─────────────────────────────────────────────────────────────
+    // Any signed-in user can read feedback.
+    // Only the reviewer can submit their own feedback.
+    // Feedback is immutable once submitted.
+    match /feedbacks/{feedbackId} {
+      allow read:          if isAuth();
+      allow create:        if isAuth() &&
+        request.resource.data.reviewerId == request.auth.uid;
+      allow update, delete: if false;
     }
   }
 }
