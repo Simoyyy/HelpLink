@@ -1,19 +1,63 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:helplink/services/auth_service.dart';
+import 'package:helplink/services/firestore_service.dart';
+import 'package:helplink/screens/auth/login_screen.dart';
+import 'package:helplink/screens/auth/signup_screen.dart';
+import 'package:helplink/screens/auth/email_verification_screen.dart';
+import 'package:helplink/screens/auth/forgot_password_screen.dart';
+import 'package:helplink/screens/donor/donor_dashboard.dart';
+import 'package:helplink/screens/beneficiary/beneficiary_dashboard.dart';
+import 'package:helplink/screens/beneficiary/beneficiary_profile_screen.dart';
+import 'package:helplink/screens/beneficiary/beneficiary_requests_screen.dart';
+import 'package:helplink/screens/beneficiary/beneficiary_history_screen.dart';
+import 'package:helplink/screens/donor/donor_profile_screen.dart';
+import 'package:helplink/screens/donor/donor_history_screen.dart';
+import 'package:helplink/screens/donor/donor_ongoing_screen.dart';
+import 'package:helplink/screens/donor/set_location_screen.dart';
+import 'package:helplink/utils/theme.dart';
 
-void main() {
-  runApp(const MainApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(const HelpLinkApp());
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+class HelpLinkApp extends StatelessWidget {
+  const HelpLinkApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Hello World!'),
-        ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()),
+        Provider(create: (_) => FirestoreService()),
+      ],
+      child: MaterialApp(
+        title: 'HelpLink',
+        debugShowCheckedModeBanner: false,
+        theme: HelpLinkTheme.lightTheme,
+        initialRoute: '/login',
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/signup': (context) => const SignupScreen(),
+          '/verify-email': (context) => const EmailVerificationScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
+          '/donor-dashboard': (context) => const DonorDashboard(),
+          '/beneficiary-dashboard': (context) => const BeneficiaryDashboard(),
+          '/beneficiary-profile': (context) =>
+              const BeneficiaryProfileScreen(),
+          '/beneficiary-requests': (context) =>
+              const BeneficiaryRequestsScreen(),
+          '/beneficiary-history': (context) =>
+              const BeneficiaryHistoryScreen(),
+          '/donor-profile': (context) => const DonorProfileScreen(),
+          '/donor-history': (context) => const DonorHistoryScreen(),
+          '/donor-ongoing': (context) => const DonorOngoingScreen(),
+          '/donor-set-location': (context) => const SetLocationScreen(),
+        },
+        onGenerateRoute: (settings) => null,
       ),
     );
   }

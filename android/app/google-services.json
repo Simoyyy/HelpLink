@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1071404731946",
+    "project_id": "helplink-73412",
+    "storage_bucket": "helplink-73412.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1071404731946:android:43fc918ea5a3b10b947d53",
+        "android_client_info": {
+          "package_name": "com.example.helplink"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1071404731946-eddpdcujm9ri7s98p1jsc8ckupc9bshd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2ORiwZ1_SkaZZn5odATvFMK5-Mm36GN0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1071404731946-eddpdcujm9ri7s98p1jsc8ckupc9bshd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

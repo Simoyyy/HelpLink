@@ -1,0 +1,60 @@
+query AllRequests(@limit: Int = 100, @offset: Int = 0) @auth(level: PUBLIC, insecureReason: "Listing requests without sensitive data is safe for public viewing.") {
+  requests(limit: $limit, offset: $offset) {
+    id
+    title
+    description
+    status
+    category
+    urgency
+    createdAt
+    beneficiary {
+      id
+      username
+    }
+  }
+}
+
+query MyOffers(@limit: Int = 100, @offset: Int = 0) @auth(level: USER, insecureReason: "This query fetches data specific to the authenticated user (auth.uid is used implicitly in the 'donor' relation).") {
+  offers(where: { donor: { authId: { eq_expr: "auth.uid" } } }, limit: $limit, offset: $offset) {
+    id
+    status
+    createdAt
+    messageToBeneficiary
+    request {
+      id
+      title
+      description
+    }
+  }
+}
+
+mutation CreateRequest($title: String!, $description: String!, $category: String, $urgency: String, $location: Vector) @auth(level: USER, insecureReason: "This mutation requires user authentication to create a request tied to their account.") {
+  request_insert(
+    data: {
+      beneficiaryId_expr: "auth.uid"
+      title: $title
+      description: $description
+      status: "pending"
+      category: $category
+      urgency: $urgency
+      location: $location
+      createdAt_expr: "request.time"
+    }
+  ) {
+    id
+  }
+}
+
+mutation SendMessageToMatch($matchId: UUID!, $content: String!) @auth(level: USER, insecureReason: "Sending a message requires user authentication to associate the sender with the message.") {
+  message_insert(
+    data: {
+      matchId: $matchId
+      senderId_expr: "auth.uid"
+      content: $content
+      createdAt_expr: "request.time"
+      isRead: false
+    }
+  ) {
+    id
+  }
+}
