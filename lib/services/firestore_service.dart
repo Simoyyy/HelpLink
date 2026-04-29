@@ -363,11 +363,40 @@ class FirestoreService {
         .collection(AppConstants.helpRequestsCollection)
         .doc(requestId)
         .collection(AppConstants.messagesCollection)
-        .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ChatMessage.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+      final messages = snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+      messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return messages;
+    });
+  }
+
+  /// Stream help requests where a beneficiary has an active conversation
+  Stream<List<HelpRequest>> getBeneficiaryConversations(String beneficiaryId) {
+    return _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .where('beneficiaryId', isEqualTo: beneficiaryId)
+        .where('status', whereIn: [
+          RequestStatus.matched.name,
+          RequestStatus.active.name,
+          RequestStatus.completed.name,
+        ])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
+  }
+
+  /// Stream announcements ordered by newest first
+  Stream<List<Map<String, dynamic>>> getAnnouncements() {
+    return _firestore
+        .collection(AppConstants.announcementsCollection)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   // ══════════════════════════════════════════════

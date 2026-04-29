@@ -7,6 +7,7 @@ import 'package:helplink/screens/ai_chat_screen.dart';
 import 'package:helplink/screens/beneficiary/beneficiary_requests_screen.dart';
 import 'package:helplink/screens/beneficiary/new_request_screen.dart';
 import 'package:helplink/screens/donor/chat_screen.dart';
+import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 
 class BeneficiaryDashboard extends StatefulWidget {
@@ -18,6 +19,22 @@ class BeneficiaryDashboard extends StatefulWidget {
 
 class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   VoidCallback? _closeChat;
+
+  // 0 = all time, otherwise number of days
+  int _filterDays = 0;
+  RequestCategory? _filterCategory;
+
+  List<HelpRequest> _applyFilters(List<HelpRequest> requests) {
+    var result = requests;
+    if (_filterDays > 0) {
+      final cutoff = DateTime.now().subtract(Duration(days: _filterDays));
+      result = result.where((r) => r.createdAt.isAfter(cutoff)).toList();
+    }
+    if (_filterCategory != null) {
+      result = result.where((r) => r.category == _filterCategory).toList();
+    }
+    return result;
+  }
 
   @override
   void dispose() {
@@ -179,7 +196,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                   context,
                                   MaterialPageRoute(
                                       builder: (_) =>
-                                          const BeneficiaryRequestsScreen()),
+                                          NotificationScreen(user: user)),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -416,52 +433,183 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                 const SizedBox(height: 24),
 
                 // ─── Label 8: Your Requests list ───
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24),
-                  child: Text('Your Requests',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textDark)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Your Requests',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textDark)),
+                      if (_filterDays > 0 || _filterCategory != null)
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _filterDays = 0;
+                            _filterCategory = null;
+                          }),
+                          child: const Text('Clear',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.primaryPurple,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Filter box
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        Row(
+                          children: [
+                            const Icon(Icons.tune_rounded,
+                                size: 16, color: AppTheme.primaryPurple),
+                            const SizedBox(width: 6),
+                            const Text('Filter',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primaryPurple)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Date label
+                        const Text('Date',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textMuted)),
+                        const SizedBox(height: 6),
+
+                        // Date chips
+                        SizedBox(
+                          height: 34,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              for (final entry in {
+                                'All': 0,
+                                'Last 7 Days': 7,
+                                'Last Month': 30,
+                                'Last 3 Months': 90,
+                                'Last 6 Months': 180,
+                                'Last Year': 365,
+                              }.entries)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _filterChip(
+                                    label: entry.key,
+                                    selected: _filterDays == entry.value,
+                                    onTap: () => setState(
+                                        () => _filterDays = entry.value),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Category label
+                        const Text('Type',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textMuted)),
+                        const SizedBox(height: 6),
+
+                        // Category chips
+                        SizedBox(
+                          height: 34,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _filterChip(
+                                  label: 'All',
+                                  selected: _filterCategory == null,
+                                  onTap: () =>
+                                      setState(() => _filterCategory = null),
+                                ),
+                              ),
+                              for (final cat in RequestCategory.values)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _filterChip(
+                                    label: cat == RequestCategory.other
+                                        ? 'Others'
+                                        : cat.name[0].toUpperCase() +
+                                            cat.name.substring(1),
+                                    selected: _filterCategory == cat,
+                                    onTap: () =>
+                                        setState(() => _filterCategory = cat),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
-                if (snapshot.connectionState == ConnectionState.waiting)
-                  const Center(
-                      child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: CircularProgressIndicator()))
-                else if (requests.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Center(
-                        child: Text(
-                            'No requests yet. Tap "New Request" to get started!',
+                Builder(builder: (context) {
+                  final filtered = _applyFilters(requests);
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                        child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: CircularProgressIndicator()));
+                  }
+                  if (filtered.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            requests.isEmpty
+                                ? 'No requests yet. Tap "New Request" to get started!'
+                                : 'No requests match the selected filters.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: AppTheme.textMuted)),
+                            style:
+                                const TextStyle(color: AppTheme.textMuted),
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                else
-                  ListView.builder(
+                    );
+                  }
+                  return ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    itemCount: requests.length,
-                    itemBuilder: (context, index) {
-                      return _buildRequestCard(
-                          requests[index], user.uid, user.fullName);
-                    },
-                  ),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) => _buildRequestCard(
+                        filtered[index], user.uid, user.fullName),
+                  );
+                }),
 
                 const SizedBox(height: 24),
 
@@ -721,6 +869,35 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primaryPurple : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppTheme.primaryPurple : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: selected ? Colors.white : AppTheme.textMuted,
+          ),
+        ),
       ),
     );
   }

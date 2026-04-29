@@ -20,6 +20,8 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final _categoryController = TextEditingController(text: 'Food');
+  final _categoryFieldKey = GlobalKey();
 
   RequestCategory _selectedCategory = RequestCategory.food;
   bool _isAnonymous = false;
@@ -40,6 +42,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _categoryController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
@@ -302,18 +305,36 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
 
                     _buildLabel('Category'),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<RequestCategory>(
-                      initialValue: _selectedCategory,
-                      decoration: const InputDecoration(),
-                      items: RequestCategory.values.map((cat) {
-                        return DropdownMenuItem(
-                          value: cat,
-                          child: Text(
-                              cat.name[0].toUpperCase() + cat.name.substring(1)),
-                        );
-                      }).toList(),
-                      onChanged: (v) =>
-                          setState(() => _selectedCategory = v!),
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        popupMenuTheme: PopupMenuThemeData(
+                          color: Colors.white,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                        ),
+                        highlightColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                        splashColor: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                      ),
+                      child: Builder(
+                        builder: (menuCtx) => GestureDetector(
+                          onTap: () => _showCategoryMenu(menuCtx),
+                          child: AbsorbPointer(
+                            child: TextFormField(
+                              key: _categoryFieldKey,
+                              controller: _categoryController,
+                              readOnly: true,
+                              showCursor: false,
+                              decoration: const InputDecoration(
+                                hintText: 'Select a category',
+                                suffixIcon: Icon(Icons.arrow_drop_down_rounded),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
 
                     const SizedBox(height: 16),
@@ -596,6 +617,59 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
         ],
       ),
     );
+  }
+
+  void _showCategoryMenu(BuildContext context) {
+    final box =
+        _categoryFieldKey.currentContext!.findRenderObject() as RenderBox;
+    final offset = box.localToGlobal(Offset.zero);
+    final screenSize = MediaQuery.of(context).size;
+
+    showMenu<RequestCategory>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy + box.size.height,
+        screenSize.width - offset.dx - box.size.width,
+        screenSize.height - offset.dy - box.size.height,
+      ),
+      constraints: BoxConstraints(
+        minWidth: box.size.width,
+        maxWidth: box.size.width,
+        maxHeight: 56.0 * 3.5,
+      ),
+      items: RequestCategory.values.map((cat) {
+        final label = cat == RequestCategory.other
+            ? 'Others'
+            : cat.name[0].toUpperCase() + cat.name.substring(1);
+        final isSelected = _selectedCategory == cat;
+        return PopupMenuItem<RequestCategory>(
+          value: cat,
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight:
+                  isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? AppTheme.primaryPurple
+                  : AppTheme.textDark,
+            ),
+          ),
+        );
+      }).toList(),
+    ).then((cat) {
+      if (cat == null) return;
+      final label = cat == RequestCategory.other
+          ? 'Others'
+          : cat.name[0].toUpperCase() + cat.name.substring(1);
+      setState(() {
+        _selectedCategory = cat;
+        _categoryController.text = label;
+      });
+    });
   }
 
   Widget _buildLabel(String text) {

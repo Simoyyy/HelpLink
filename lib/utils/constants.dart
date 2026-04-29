@@ -2,6 +2,7 @@ class AppConstants {
   static const String usersCollection = 'users';
   static const String helpRequestsCollection = 'help_requests';
   static const String messagesCollection = 'messages';
+  static const String announcementsCollection = 'announcements';
 
   static const String statusPending = 'pending';
   static const String statusMatched = 'matched';
