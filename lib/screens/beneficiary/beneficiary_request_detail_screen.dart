@@ -25,226 +25,183 @@ class BeneficiaryRequestDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fs = Provider.of<FirestoreService>(context, listen: false);
     final topPad = MediaQuery.of(context).padding.top;
-    final dateStr = DateFormat('M/d/yyyy').format(request.createdAt);
-    final canEdit = request.status == RequestStatus.pending;
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundGrey,
-      body: Column(
-        children: [
-          // ── Purple header ───────────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(16, topPad + 10, 16, 20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.beneficiaryGradientStart,
-                  AppTheme.beneficiaryGradientEnd,
-                ],
-              ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.arrow_back,
-                      color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Request Details',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-              ],
-            ),
-          ),
+    return StreamBuilder<HelpRequest?>(
+      stream: fs.getRequestStream(request.id),
+      builder: (context, snapshot) {
+        final liveRequest = snapshot.data ?? request;
+        final dateStr = DateFormat('M/d/yyyy').format(liveRequest.createdAt);
+        final canEdit = liveRequest.status == RequestStatus.pending;
 
-          // ── Scrollable content ──────────────────────────────────────────
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Status pill
-                  _StatusPill(status: request.status),
-                  const SizedBox(height: 16),
-
-                  // Main details card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          request.title,
-                          style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textDark),
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(color: Color(0xFFE2E8F0)),
-                        const SizedBox(height: 12),
-                        _InfoRow(
-                          icon: Icons.local_offer_outlined,
-                          label: 'Category',
-                          value: request.categoryLabel,
-                        ),
-                        const SizedBox(height: 12),
-                        if (request.location != null &&
-                            request.location!.isNotEmpty) ...[
-                          _InfoRow(
-                            icon: Icons.location_on_outlined,
-                            label: 'Location',
-                            value: request.location!,
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        _InfoRow(
-                          icon: Icons.person_outline,
-                          label: 'Requested by',
-                          value: request.displayName,
-                        ),
-                        const SizedBox(height: 12),
-                        _InfoRow(
-                          icon: Icons.calendar_today_outlined,
-                          label: 'Date Posted',
-                          value: dateStr,
-                        ),
-                        if ((request.status == RequestStatus.matched ||
-                                request.status == RequestStatus.active) &&
-                            request.donorName != null) ...[
-                          const SizedBox(height: 12),
-                          _InfoRow(
-                            icon: Icons.volunteer_activism_outlined,
-                            label: 'Donor',
-                            value: request.donorName!,
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        const Divider(color: Color(0xFFE2E8F0)),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Description',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textDark),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          request.description,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              color: AppTheme.textMuted,
-                              height: 1.5),
-                        ),
-                      ],
-                    ),
+        return Scaffold(
+          backgroundColor: AppTheme.backgroundGrey,
+          body: Column(
+            children: [
+              // ── Purple header ───────────────────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(16, topPad + 10, 16, 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.beneficiaryGradientStart,
+                      AppTheme.beneficiaryGradientEnd,
+                    ],
                   ),
-
-                  // Feedback card (when completed and feedback was given)
-                  if (request.status == RequestStatus.completed &&
-                      request.beneficiaryFeedbackGiven) ...[
-                    const SizedBox(height: 16),
-                    _FeedbackCard(
-                      requestId: request.id,
-                      isDonor: false,
-                      ratingLabels: _ratingLabels,
-                      color: AppTheme.primaryPurple,
+                ),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Request Details',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
                     ),
                   ],
+                ),
+              ),
 
-                  // Message button (when matched/active)
-                  if (request.status == RequestStatus.matched ||
-                      request.status == RequestStatus.active) ...[
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              request: request,
-                              currentUserId: userId,
-                              currentUserName: userName,
-                            ),
-                          ),
+              // ── Scrollable content ──────────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Status pill
+                      _StatusPill(status: liveRequest.status),
+                      const SizedBox(height: 16),
+
+                      // Main details card
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        icon: const Icon(Icons.chat_bubble_outline,
-                            color: AppTheme.primaryPurple),
-                        label: const Text('Message Donor',
-                            style: TextStyle(
-                                color: AppTheme.primaryPurple,
-                                fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                              color: AppTheme.primaryPurple),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              liveRequest.title,
+                              style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textDark),
+                            ),
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFFE2E8F0)),
+                            const SizedBox(height: 12),
+                            _InfoRow(
+                              icon: Icons.local_offer_outlined,
+                              label: 'Category',
+                              value: liveRequest.categoryLabel,
+                            ),
+                            const SizedBox(height: 12),
+                            if (liveRequest.location != null &&
+                                liveRequest.location!.isNotEmpty) ...[
+                              _InfoRow(
+                                icon: Icons.location_on_outlined,
+                                label: 'Location',
+                                value: liveRequest.location!,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            _InfoRow(
+                              icon: Icons.person_outline,
+                              label: 'Requested by',
+                              value: liveRequest.displayName,
+                            ),
+                            const SizedBox(height: 12),
+                            _InfoRow(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'Date Posted',
+                              value: dateStr,
+                            ),
+                            if ((liveRequest.status == RequestStatus.matched ||
+                                    liveRequest.status ==
+                                        RequestStatus.active) &&
+                                liveRequest.donorName != null) ...[
+                              const SizedBox(height: 12),
+                              _InfoRow(
+                                icon: Icons.volunteer_activism_outlined,
+                                label: 'Donor',
+                                value: liveRequest.donorName!,
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFFE2E8F0)),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Description',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textDark),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              liveRequest.description,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.textMuted,
+                                  height: 1.5),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
 
-                  // Edit / Delete (pending only)
-                  if (canEdit) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
+                      // Feedback card (when completed and feedback was given)
+                      if (liveRequest.status == RequestStatus.completed &&
+                          liveRequest.beneficiaryFeedbackGiven) ...[
+                        const SizedBox(height: 16),
+                        _FeedbackCard(
+                          requestId: liveRequest.id,
+                          isDonor: false,
+                          ratingLabels: _ratingLabels,
+                          color: AppTheme.primaryPurple,
+                        ),
+                      ],
+
+                      // Message button (when matched/active)
+                      if (liveRequest.status == RequestStatus.matched ||
+                          liveRequest.status == RequestStatus.active) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    EditRequestScreen(request: request),
+                                builder: (_) => ChatScreen(
+                                  request: liveRequest,
+                                  currentUserId: userId,
+                                  currentUserName: userName,
+                                ),
                               ),
                             ),
-                            icon: const Icon(Icons.edit_outlined,
-                                size: 18, color: Colors.white),
-                            label: const Text('Edit',
+                            icon: const Icon(Icons.chat_bubble_outline,
+                                color: AppTheme.primaryPurple),
+                            label: const Text('Message Donor',
                                 style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryPurple,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _confirmDelete(context),
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: Colors.white),
-                            label: const Text('Delete',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.errorRed,
+                                    color: AppTheme.primaryPurple,
+                                    fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                  color: AppTheme.primaryPurple),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               padding:
@@ -253,16 +210,68 @@ class BeneficiaryRequestDetailScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                  ],
 
-                  const SizedBox(height: 24),
-                ],
+                      // Edit / Delete (pending only)
+                      if (canEdit) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        EditRequestScreen(request: liveRequest),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 18, color: Colors.white),
+                                label: const Text('Edit',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryPurple,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => _confirmDelete(context),
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: Colors.white),
+                                label: const Text('Delete',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.errorRed,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
