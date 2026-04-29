@@ -101,16 +101,11 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
         builder: (context, snapshot) {
           final requests = snapshot.data ?? [];
 
-          // Derive stats from the stream data (single source of truth)
-          final int total = requests.length;
           final int active = requests
               .where((r) =>
                   r.status == RequestStatus.pending ||
                   r.status == RequestStatus.matched ||
                   r.status == RequestStatus.active)
-              .length;
-          final int completed = requests
-              .where((r) => r.status == RequestStatus.completed)
               .length;
           final bool hasNewMatch =
               requests.any((r) => r.status == RequestStatus.matched);
@@ -265,23 +260,6 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         ),
                       ),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ─── Label 3 & 4: Stats cards ───
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      Expanded(
-                          child: _buildStatCard('Total Requests', '$total')),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _buildStatCard(
-                              'Completed\nRequests', '$completed')),
                     ],
                   ),
                 ),
@@ -702,31 +680,6 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style:
-                  const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-          const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryPurple)),
-        ],
       ),
     );
   }
