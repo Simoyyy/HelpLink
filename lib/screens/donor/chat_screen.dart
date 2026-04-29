@@ -33,6 +33,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
   bool _isTranscribing = false;
+  int _lastMessageCount = 0;
 
   static const String _geminiApiKey = 'AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8';
 
@@ -267,6 +268,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
 
                 final messages = snapshot.data ?? [];
+
+                if (messages.length > _lastMessageCount) {
+                  _lastMessageCount = messages.length;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scrollController.hasClients) {
+                      _scrollController.animateTo(
+                        _scrollController.position.maxScrollExtent,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                      );
+                    }
+                  });
+                }
 
                 if (messages.isEmpty) {
                   return Center(

@@ -527,6 +527,15 @@ class FirestoreService {
     }
   }
 
+  /// Stream a single help request document for real-time status updates
+  Stream<HelpRequest?> getRequestStream(String requestId) {
+    return _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .snapshots()
+        .map((doc) => doc.exists ? HelpRequest.fromFirestore(doc) : null);
+  }
+
   // ── Helpers ──
 
   DateTime _getWeekStart() {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -23,8 +24,36 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   bool _acceptAnonymously = false;
   bool _isLoading = false;
 
+  late HelpRequest _currentRequest;
+  StreamSubscription<HelpRequest?>? _requestSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentRequest = widget.request;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_requestSub == null) {
+      final fs = Provider.of<FirestoreService>(context, listen: false);
+      _requestSub = fs.getRequestStream(_currentRequest.id).listen((r) {
+        if (r != null && mounted) {
+          setState(() => _currentRequest = r);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _requestSub?.cancel();
+    super.dispose();
+  }
+
   String get _statusLabel {
-    switch (widget.request.status) {
+    switch (_currentRequest.status) {
       case RequestStatus.pending:
         return 'Awaiting Donor';
       case RequestStatus.matched:
@@ -39,7 +68,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   }
 
   Color get _statusColor {
-    switch (widget.request.status) {
+    switch (_currentRequest.status) {
       case RequestStatus.pending:
         return const Color(0xFFB8860B);
       case RequestStatus.matched:
@@ -54,7 +83,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   }
 
   Color get _statusBgColor {
-    switch (widget.request.status) {
+    switch (_currentRequest.status) {
       case RequestStatus.pending:
         return const Color(0xFFFFF8DC);
       case RequestStatus.matched:
@@ -81,7 +110,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         _acceptAnonymously ? 'Anonymous Donor' : user.fullName;
 
     final error = await firestoreService.offerHelp(
-      requestId: widget.request.id,
+      requestId: _currentRequest.id,
       donorId: user.uid,
       donorName: donorName,
     );
@@ -112,7 +141,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     final authService = Provider.of<AuthService>(context, listen: false);
     final user = authService.userModel;
     final isDonor = user != null && user.role.name == 'donor';
-    final isPending = widget.request.status == RequestStatus.pending;
+    final isPending = _currentRequest.status == RequestStatus.pending;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -191,7 +220,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
 
                   // Title
                   Text(
-                    widget.request.title,
+                    _currentRequest.title,
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -204,32 +233,32 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   _buildInfoRow(
                     Icons.sell_outlined,
                     'Category',
-                    widget.request.categoryLabel,
+                    _currentRequest.categoryLabel,
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
                     Icons.location_on_outlined,
                     'Location',
-                    widget.request.location ?? 'Not specified',
+                    _currentRequest.location ?? 'Not specified',
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
                     Icons.person_outline,
                     'Requested by',
-                    widget.request.displayName,
+                    _currentRequest.displayName,
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
                     Icons.calendar_today_outlined,
                     'Date Posted',
-                    DateFormat('M/d/yyyy').format(widget.request.createdAt),
+                    DateFormat('M/d/yyyy').format(_currentRequest.createdAt),
                   ),
-                  if (widget.request.donorName != null) ...[
+                  if (_currentRequest.donorName != null) ...[
                     const SizedBox(height: 16),
                     _buildInfoRow(
                       Icons.volunteer_activism,
                       'Donor',
-                      widget.request.donorName!,
+                      _currentRequest.donorName!,
                     ),
                   ],
 
@@ -246,7 +275,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.request.description,
+                    _currentRequest.description,
                     style: const TextStyle(
                       fontSize: 15,
                       color: AppTheme.textMuted,
@@ -255,8 +284,8 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   ),
 
                   // Feedback card (completed + feedback given)
-                  if (widget.request.status == RequestStatus.completed &&
-                      widget.request.donorFeedbackGiven) ...[
+                  if (_currentRequest.status == RequestStatus.completed &&
+                      _currentRequest.donorFeedbackGiven) ...[
                     const SizedBox(height: 24),
                     _buildFeedbackCard(context),
                   ],
@@ -388,7 +417,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   Widget _buildFeedbackCard(BuildContext context) {
     final fs = Provider.of<FirestoreService>(context, listen: false);
     return FutureBuilder<Map<String, dynamic>?>(
-      future: fs.getFeedback(requestId: widget.request.id, isDonor: true),
+      future: fs.getFeedback(requestId: _currentRequest.id, isDonor: true),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data == null) {
           return const SizedBox.shrink();
