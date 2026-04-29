@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -5,6 +6,8 @@ import 'package:helplink/models/message_model.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:intl/intl.dart';
+import 'package:record/record.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ChatScreen extends StatefulWidget {
   final HelpRequest request;
@@ -25,6 +28,13 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  late Stream<List<ChatMessage>> _messagesStream;
+
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _isRecording = false;
+  bool _isTranscribing = false;
+
+  static const String _geminiApiKey = 'AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8';
 
   bool get _isDonor => widget.currentUserId == widget.request.donorId;
 
@@ -50,11 +60,76 @@ class _ChatScreenState extends State<ChatScreen> {
     return const [Color(0xFF9333EA), Color(0xFF06B6D4)];
   }
 
+  bool _streamInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_streamInitialized) {
+      _streamInitialized = true;
+      final firestoreService =
+          Provider.of<FirestoreService>(context, listen: false);
+      _messagesStream = firestoreService.getMessages(
+        widget.currentUserId,
+        _otherUserId,
+        widget.request.id,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _recorder.dispose();
     super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied')),
+        );
+      }
+      return;
+    }
+    final path =
+        '${Directory.systemTemp.path}/helplink_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+    await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav), path: path);
+    setState(() => _isRecording = true);
+  }
+
+  Future<void> _stopAndTranscribe() async {
+    final path = await _recorder.stop();
+    setState(() => _isRecording = false);
+    if (path == null) return;
+
+    setState(() => _isTranscribing = true);
+    try {
+      final bytes = await File(path).readAsBytes();
+      final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: _geminiApiKey);
+      final response = await model.generateContent([
+        Content.multi([
+          DataPart('audio/wav', bytes),
+          TextPart('Transcribe this audio exactly as spoken. Return only the transcribed text, nothing else.'),
+        ]),
+      ]);
+      final transcribed = response.text?.trim() ?? '';
+      if (transcribed.isNotEmpty && mounted) {
+        _messageController.text = transcribed;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Transcription failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTranscribing = false);
+      try { await File(path).delete(); } catch (_) {}
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -76,24 +151,30 @@ class _ChatScreenState extends State<ChatScreen> {
       timestamp: DateTime.now(),
     );
 
-    await firestoreService.sendMessage(message);
-
-    // Scroll to bottom after sending
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+    try {
+      await firestoreService.sendMessage(message);
+      // Scroll to bottom after sending
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        _messageController.text = text; // restore the message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send: $e'), backgroundColor: Colors.red),
         );
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<FirestoreService>(context);
-
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       body: Column(
@@ -172,23 +253,57 @@ class _ChatScreenState extends State<ChatScreen> {
           // Messages
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
-              stream: firestoreService.getMessages(
-                widget.currentUserId,
-                _otherUserId,
-                widget.request.id,
-              ),
+              stream: _messagesStream,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Error: ${snapshot.error}',
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        textAlign: TextAlign.center),
+                  );
+                }
 
-                final messages = snapshot.data!;
+                final messages = snapshot.data ?? [];
 
                 if (messages.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No messages yet. Say hello!',
-                      style: TextStyle(color: AppTheme.textMuted),
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF9333EA), Color(0xFF06B6D4)],
+                              ),
+                              borderRadius: BorderRadius.circular(36),
+                            ),
+                            child: const Icon(Icons.chat_bubble_outline,
+                                color: Colors.white, size: 32),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Start the conversation!',
+                              style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textDark)),
+                          const SizedBox(height: 8),
+                          Text(
+                            _isDonor
+                                ? 'Send a message to ${widget.request.beneficiaryName} and coordinate how you can help.'
+                                : 'Say hello to your donor and share more details about your need.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 14, color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -207,6 +322,23 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
+          // Recording banner
+          if (_isRecording)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              color: Colors.red.shade50,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.mic, color: Colors.red.shade400, size: 16),
+                  const SizedBox(width: 6),
+                  Text('Recording… release to transcribe',
+                      style: TextStyle(color: Colors.red.shade400, fontSize: 13)),
+                ],
+              ),
+            ),
+
           // Message input
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 8, 32),
@@ -221,18 +353,51 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    maxLines: 5,
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
-                      hintText: 'Type a message...',
+                      hintText: _isTranscribing
+                          ? 'Transcribing…'
+                          : 'Type or hold mic to speak…',
                       filled: true,
                       fillColor: AppTheme.backgroundGrey,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(20),
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Mic button
+                GestureDetector(
+                  onLongPressStart: (_) => _startRecording(),
+                  onLongPressEnd: (_) => _stopAndTranscribe(),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _isRecording
+                          ? Colors.red
+                          : _isTranscribing
+                              ? Colors.orange.shade100
+                              : Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isTranscribing
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            Icons.mic,
+                            color: _isRecording ? Colors.white : Colors.grey.shade600,
+                            size: 22,
+                          ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -302,7 +467,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
 
             // Message bubble
-            Container(
+            IntrinsicWidth(
+             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
@@ -316,6 +482,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     message.content,
@@ -337,6 +504,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
+             ),
             ),
           ],
         ),

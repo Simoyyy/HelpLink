@@ -11,6 +11,7 @@ import 'package:helplink/screens/donor/donor_history_screen.dart';
 import 'package:helplink/screens/donor/donor_ongoing_screen.dart';
 import 'package:helplink/screens/donor/donor_profile_screen.dart';
 import 'package:helplink/screens/donor/set_location_screen.dart';
+import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 
 class DonorDashboard extends StatefulWidget {
@@ -21,7 +22,7 @@ class DonorDashboard extends StatefulWidget {
 }
 
 class _DonorDashboardState extends State<DonorDashboard> {
-  int _selectedTab = 0;
+  final int _selectedTab = 0;
   String _selectedCategory = 'All';
 
   final _aiService = AIService();
@@ -47,8 +48,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
 
   void _loadRecommendations() {
     final fs = Provider.of<FirestoreService>(context, listen: false);
-    final user =
-        Provider.of<AuthService>(context, listen: false).userModel;
+    final user = Provider.of<AuthService>(context, listen: false).userModel;
     if (user == null) return;
     setState(() {
       _recommendationsFuture = Future.wait([
@@ -114,7 +114,10 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [AppTheme.donorGradientStart, AppTheme.donorGradientEnd],
+                  colors: [
+                    AppTheme.donorGradientStart,
+                    AppTheme.donorGradientEnd
+                  ],
                 ),
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(24),
@@ -132,7 +135,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text('Welcome back,',
-                                style: TextStyle(fontSize: 14, color: Colors.white70)),
+                                style: TextStyle(
+                                    fontSize: 14, color: Colors.white70)),
                             Text(user.fullName,
                                 style: const TextStyle(
                                     fontSize: 24,
@@ -166,7 +170,11 @@ class _DonorDashboardState extends State<DonorDashboard> {
                             icon: const Icon(Icons.person_outline,
                                 color: Colors.white)),
                         IconButton(
-                            onPressed: () {},
+                            onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        NotificationScreen(user: user))),
                             icon: const Icon(Icons.notifications_outlined,
                                 color: Colors.white)),
                         IconButton(
@@ -175,7 +183,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
                               await authService.signOut();
                               navigator.pushReplacementNamed('/login');
                             },
-                            icon: const Icon(Icons.logout, color: Colors.white)),
+                            icon:
+                                const Icon(Icons.logout, color: Colors.white)),
                       ]),
                     ],
                   ),
@@ -188,8 +197,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) =>
-                                    const DonorOngoingScreen())),
+                                builder: (_) => const DonorOngoingScreen())),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
@@ -205,7 +213,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
                                   children: [
                                     const Text('Active Assistance',
                                         style: TextStyle(
-                                            fontSize: 14, color: Colors.white70)),
+                                            fontSize: 14,
+                                            color: Colors.white70)),
                                     const SizedBox(height: 4),
                                     Text('$activeCount',
                                         style: const TextStyle(
@@ -242,8 +251,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(children: [
                 Expanded(
-                    child: _buildTab('Browse Nearby',
-                        Icons.location_on_outlined, 0)),
+                    child: _buildTab(
+                        'Browse Nearby', Icons.location_on_outlined, 0)),
                 Expanded(child: _buildTab('History', Icons.history, 1)),
               ]),
             ),
@@ -292,7 +301,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
                     onTap: _loadRecommendations,
                     child: const Row(
                       children: [
-                        Icon(Icons.refresh, size: 16, color: AppTheme.primaryBlue),
+                        Icon(Icons.refresh,
+                            size: 16, color: AppTheme.primaryBlue),
                         SizedBox(width: 4),
                         Text('Refresh',
                             style: TextStyle(
@@ -360,7 +370,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
                   );
                 }
                 return SizedBox(
-                  height: 230,
+                  height: 265,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -395,15 +405,13 @@ class _DonorDashboardState extends State<DonorDashboard> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedCategory = cat),
+                      onTap: () => setState(() => _selectedCategory = cat),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppTheme.primaryBlue
-                              : Colors.white,
+                          color:
+                              isSelected ? AppTheme.primaryBlue : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                               color: isSelected
@@ -490,20 +498,16 @@ class _DonorDashboardState extends State<DonorDashboard> {
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.primaryBlue : Colors.white,
           borderRadius: BorderRadius.only(
-            bottomLeft:
-                index == 0 ? const Radius.circular(16) : Radius.zero,
-            bottomRight:
-                index == 1 ? const Radius.circular(16) : Radius.zero,
+            bottomLeft: index == 0 ? const Radius.circular(16) : Radius.zero,
+            bottomRight: index == 1 ? const Radius.circular(16) : Radius.zero,
           ),
           border: Border.all(
-              color: isSelected
-                  ? AppTheme.primaryBlue
-                  : const Color(0xFFE2E8F0)),
+              color:
+                  isSelected ? AppTheme.primaryBlue : const Color(0xFFE2E8F0)),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon,
-              size: 18,
-              color: isSelected ? Colors.white : AppTheme.textMuted),
+              size: 18, color: isSelected ? Colors.white : AppTheme.textMuted),
           const SizedBox(width: 6),
           Text(label,
               style: TextStyle(
@@ -640,8 +644,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 minimumSize: const Size(0, 36),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            child: const Text('View Details',
-                style: TextStyle(fontSize: 13)),
+            child: const Text('View Details', style: TextStyle(fontSize: 13)),
           ),
         ),
       ]),
@@ -673,14 +676,12 @@ class _DonorDashboardState extends State<DonorDashboard> {
           if (request.isAnonymous) ...[
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                   color: AppTheme.warningOrange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color:
-                          AppTheme.warningOrange.withValues(alpha: 0.3))),
+                      color: AppTheme.warningOrange.withValues(alpha: 0.3))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.visibility_off,
                     size: 14, color: AppTheme.warningOrange),
@@ -707,8 +708,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
         Row(children: [
           Expanded(
             child: Text('By: ${request.displayName}',
-                style: const TextStyle(
-                    fontSize: 13, color: AppTheme.textMuted),
+                style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                 overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: 8),
@@ -716,8 +716,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
             onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) =>
-                        RequestDetailScreen(request: request))),
+                    builder: (_) => RequestDetailScreen(request: request))),
             child: const Text('View Details →',
                 style: TextStyle(
                     fontSize: 14,
