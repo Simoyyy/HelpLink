@@ -180,13 +180,13 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                           Row(
                             children: [
                               _buildHeaderIcon(
-                                icon: Icons.person_outline,
+                                icon: Icons.account_circle_rounded,
                                 onTap: () => Navigator.pushNamed(
                                     context, '/beneficiary-profile'),
                               ),
                               const SizedBox(width: 8),
                               _buildHeaderIcon(
-                                icon: Icons.notifications_outlined,
+                                icon: Icons.notifications_active_rounded,
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -228,19 +228,36 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
                               children: [
-                                const Text('Active Requests',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.white70)),
-                                const SizedBox(height: 4),
-                                Text('$active',
-                                    style: const TextStyle(
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white)),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.pending_actions_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Active Requests',
+                                        style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white70)),
+                                    const SizedBox(height: 4),
+                                    Text('$active',
+                                        style: const TextStyle(
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white)),
+                                  ],
+                                ),
                               ],
                             ),
                             if (hasNewMatch)
@@ -286,7 +303,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                 borderRadius: BorderRadius.circular(16)),
                             child: const Column(
                               children: [
-                                Icon(Icons.add, color: Colors.white, size: 28),
+                                Icon(Icons.add_circle_rounded, color: Colors.white, size: 32),
                                 SizedBox(height: 8),
                                 Text('New Request',
                                     style: TextStyle(
@@ -315,8 +332,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                             ),
                             child: const Column(
                               children: [
-                                Icon(Icons.history,
-                                    color: AppTheme.textDark, size: 28),
+                                Icon(Icons.history_edu_rounded,
+                                    color: AppTheme.primaryPurple, size: 32),
                                 SizedBox(height: 8),
                                 Text('History',
                                     style: TextStyle(
@@ -344,7 +361,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         builder: (ctx) => AlertDialog(
                           title: const Row(
                             children: [
-                              Icon(Icons.warning_amber_rounded,
+                              Icon(Icons.crisis_alert_rounded,
                                   color: AppTheme.errorRed),
                               SizedBox(width: 8),
                               Text('Emergency Assistance'),
@@ -386,7 +403,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded,
+                          Icon(Icons.crisis_alert_rounded,
                               color: Colors.white, size: 28),
                           SizedBox(width: 12),
                           Column(
@@ -454,7 +471,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         // Header
                         Row(
                           children: [
-                            const Icon(Icons.tune_rounded,
+                            const Icon(Icons.filter_alt_rounded,
                                 size: 16, color: AppTheme.primaryPurple),
                             const SizedBox(width: 6),
                             const Text('Filter',
@@ -717,9 +734,14 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(request.categoryLabel,
-              style:
-                  const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+          Row(
+            children: [
+              _categoryIcon(request.category),
+              const SizedBox(width: 5),
+              Text(request.categoryLabel,
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+            ],
+          ),
           if (request.status == RequestStatus.matched &&
               request.donorName != null) ...[
             const SizedBox(height: 12),
@@ -742,7 +764,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
               },
               child: Row(
                 children: [
-                  const Icon(Icons.chat_bubble_outline,
+                  const Icon(Icons.forum_rounded,
                       size: 16, color: AppTheme.primaryPurple),
                   const SizedBox(width: 6),
                   Text('Message',
@@ -759,29 +781,67 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
     );
   }
 
+  Widget _categoryIcon(RequestCategory category) {
+    IconData icon;
+    Color color;
+    switch (category) {
+      case RequestCategory.food:
+        icon = Icons.restaurant_rounded;
+        color = Colors.orange;
+        break;
+      case RequestCategory.medical:
+        icon = Icons.medical_services_rounded;
+        color = Colors.red;
+        break;
+      case RequestCategory.education:
+        icon = Icons.menu_book_rounded;
+        color = Colors.green;
+        break;
+      case RequestCategory.transportation:
+        icon = Icons.directions_car_rounded;
+        color = Colors.amber.shade700;
+        break;
+      case RequestCategory.housing:
+        icon = Icons.house_rounded;
+        color = AppTheme.primaryPurple;
+        break;
+      case RequestCategory.other:
+        icon = Icons.category_rounded;
+        color = AppTheme.primaryBlue;
+        break;
+    }
+    return Icon(icon, size: 15, color: color);
+  }
+
   Widget _buildStatusBadge(RequestStatus status) {
     Color bgColor;
     Color textColor;
+    IconData icon;
     switch (status) {
       case RequestStatus.pending:
         bgColor = const Color(0xFFFFF8E1);
         textColor = AppTheme.warningOrange;
+        icon = Icons.hourglass_top_rounded;
         break;
       case RequestStatus.matched:
         bgColor = const Color(0xFFE8F5E9);
         textColor = AppTheme.successGreen;
+        icon = Icons.handshake_rounded;
         break;
       case RequestStatus.active:
         bgColor = const Color(0xFFE3F2FD);
         textColor = AppTheme.primaryBlue;
+        icon = Icons.bolt_rounded;
         break;
       case RequestStatus.completed:
         bgColor = Colors.grey[100]!;
         textColor = AppTheme.textMuted;
+        icon = Icons.check_circle_rounded;
         break;
       case RequestStatus.cancelled:
         bgColor = const Color(0xFFFFEBEE);
         textColor = AppTheme.errorRed;
+        icon = Icons.cancel_rounded;
         break;
     }
 
@@ -794,7 +854,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.circle, size: 8, color: textColor),
+          Icon(icon, size: 12, color: textColor),
           const SizedBox(width: 4),
           Text(
             status.name[0].toUpperCase() + status.name.substring(1),
