@@ -461,15 +461,22 @@ class FirestoreService {
           .ref()
           .child('profile_images')
           .child('$userId.jpg');
-      await ref.putFile(imageFile);
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      await ref.putFile(imageFile, metadata);
       final url = await ref.getDownloadURL();
       await _firestore
           .collection(AppConstants.usersCollection)
           .doc(userId)
           .update({'profileImageUrl': url});
       return url;
+    } on FirebaseException catch (e) {
+      // ignore: avoid_print
+      print('[Storage] upload failed — code: ${e.code}, message: ${e.message}');
+      rethrow;
     } catch (e) {
-      return null;
+      // ignore: avoid_print
+      print('[Storage] upload failed — $e');
+      rethrow;
     }
   }
 

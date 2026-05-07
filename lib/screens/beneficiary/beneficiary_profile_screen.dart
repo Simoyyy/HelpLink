@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -139,16 +140,32 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
 
     setState(() => _isUploadingPhoto = true);
 
-    final url = await firestoreService.uploadProfileImage(
-        userId: user.uid, imageFile: File(picked.path));
-
-    await authService.loadUserData();
-
-    if (mounted) {
-      setState(() => _isUploadingPhoto = false);
-      if (url == null) {
+    try {
+      await firestoreService.uploadProfileImage(
+          userId: user.uid, imageFile: File(picked.path));
+      await authService.loadUserData();
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Failed to upload photo. Please try again.'),
+            content: Text('Profile photo updated!'),
+            backgroundColor: AppTheme.successGreen));
+      }
+    } on FirebaseException catch (e) {
+      await authService.loadUserData();
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        final msg = e.code == 'unauthorized'
+            ? 'Permission denied. Storage rules may not be deployed yet.'
+            : 'Upload failed: ${e.message ?? e.code}';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(msg), backgroundColor: AppTheme.errorRed));
+      }
+    } catch (e) {
+      await authService.loadUserData();
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Upload failed: $e'),
             backgroundColor: AppTheme.errorRed));
       }
     }
