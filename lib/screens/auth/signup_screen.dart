@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/services/auth_service.dart';
@@ -70,8 +71,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   constraints: const BoxConstraints(),
                 ),
 
-                const SizedBox(height: 24),
-
+                const SizedBox(height: 4),
+                Center(
+                  child: Lottie.asset(
+                    'assets/lottie/auth.json',
+                    width: 160,
+                    height: 160,
+                    repeat: true,
+                  ),
+                ),
                 const Text(
                   'Create Account',
                   style: TextStyle(

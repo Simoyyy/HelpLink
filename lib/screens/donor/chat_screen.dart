@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/models/message_model.dart';
@@ -289,19 +290,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF9333EA), Color(0xFF06B6D4)],
-                              ),
-                              borderRadius: BorderRadius.circular(36),
-                            ),
-                            child: const Icon(Icons.chat_bubble_outline,
-                                color: Colors.white, size: 32),
+                          Lottie.asset(
+                            'assets/lottie/chat_empty.json',
+                            width: 160,
+                            height: 160,
+                            repeat: true,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
                           const Text('Start the conversation!',
                               style: TextStyle(
                                   fontSize: 17,

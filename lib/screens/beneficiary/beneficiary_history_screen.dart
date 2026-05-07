@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -229,9 +230,18 @@ class _HistoryContentState extends State<_HistoryContent> {
               final filtered = _applyFilters(snapshot.data ?? []);
 
               if (filtered.isEmpty) {
-                return const Center(
-                  child: Text('No requests found.',
-                      style: TextStyle(color: AppTheme.textMuted)),
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Lottie.asset('assets/lottie/empty_requests.json',
+                          width: 160, height: 160, repeat: true),
+                      const SizedBox(height: 8),
+                      const Text('No requests found.',
+                          style: TextStyle(
+                              fontSize: 14, color: AppTheme.textMuted)),
+                    ],
+                  ),
                 );
               }
 

@@ -440,12 +440,16 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         color: AppTheme.errorRed,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.crisis_alert_rounded,
-                              color: Colors.white, size: 28),
-                          SizedBox(width: 12),
-                          Column(
+                          Lottie.asset(
+                            'assets/lottie/sos.json',
+                            width: 40,
+                            height: 40,
+                            repeat: true,
+                          ),
+                          const SizedBox(width: 8),
+                          const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('SOS - Emergency Assistance',

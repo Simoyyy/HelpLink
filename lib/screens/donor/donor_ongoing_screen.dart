@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -143,10 +144,19 @@ class _OngoingContentState extends State<_OngoingContent> {
             // ── Request cards ──
             Expanded(
               child: shown.isEmpty
-                  ? const Center(
-                      child: Text('No requests in this category.',
-                          style: TextStyle(
-                              color: AppTheme.textMuted, fontSize: 14)))
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Lottie.asset('assets/lottie/empty_requests.json',
+                              width: 160, height: 160, repeat: true),
+                          const SizedBox(height: 8),
+                          const Text('No requests in this category.',
+                              style: TextStyle(
+                                  fontSize: 14, color: AppTheme.textMuted)),
+                        ],
+                      ),
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       itemCount: shown.length,

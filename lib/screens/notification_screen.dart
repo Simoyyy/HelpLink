@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/models/user_model.dart';
@@ -226,6 +227,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (requests.isEmpty) {
           return _buildEmpty(
             icon: Icons.chat_bubble_outline,
+            lottieAsset: 'assets/lottie/chat_empty.json',
             title: 'No Messages Yet',
             subtitle: _isDonor
                 ? 'Conversations with beneficiaries will appear here once you accept a request.'
@@ -368,6 +370,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     required IconData icon,
     required String title,
     required String subtitle,
+    String lottieAsset = 'assets/lottie/no_notifications.json',
   }) {
     return Center(
       child: Padding(
@@ -375,16 +378,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: _gradient),
-                borderRadius: BorderRadius.circular(36),
-              ),
-              child: Icon(icon, color: Colors.white, size: 32),
-            ),
-            const SizedBox(height: 16),
+            Lottie.asset(lottieAsset, width: 160, height: 160, repeat: true),
+            const SizedBox(height: 8),
             Text(title,
                 style: const TextStyle(
                     fontSize: 17,

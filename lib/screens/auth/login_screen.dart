@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/services/auth_service.dart';
@@ -79,7 +80,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: EdgeInsets.zero,
                   alignment: Alignment.centerLeft,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 8),
+                Center(
+                  child: Lottie.asset(
+                    'assets/lottie/auth.json',
+                    width: 180,
+                    height: 180,
+                    repeat: true,
+                  ),
+                ),
                 const Text(
                   'Welcome Back',
                   style: TextStyle(
