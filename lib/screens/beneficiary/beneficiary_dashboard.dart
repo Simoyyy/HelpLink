@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/services/auth_service.dart';
@@ -289,15 +290,27 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                             if (hasNewMatch)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                     color: AppTheme.successGreen,
                                     borderRadius: BorderRadius.circular(20)),
-                                child: const Text('New Match!',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white)),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Lottie.asset(
+                                      'assets/lottie/new_match.json',
+                                      width: 28,
+                                      height: 28,
+                                      repeat: true,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Text('New Match!',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white)),
+                                  ],
+                                ),
                               ),
                           ],
                         ),
@@ -600,31 +613,44 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                 Builder(builder: (context) {
                   final filtered = _applyFilters(requests);
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(32),
-                            child: CircularProgressIndicator()));
+                    return Center(
+                      child: Lottie.asset(
+                        'assets/lottie/loading.json',
+                        width: 120,
+                        height: 120,
+                        repeat: true,
+                      ),
+                    );
                   }
                   if (filtered.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: Center(
-                          child: Text(
-                            requests.isEmpty
-                                ? 'No requests yet. Tap "New Request" to get started!'
-                                : 'No requests match the selected filters.',
-                            textAlign: TextAlign.center,
-                            style:
-                                const TextStyle(color: AppTheme.textMuted),
-                          ),
+                        child: Column(
+                          children: [
+                            Lottie.asset(
+                              'assets/lottie/empty_state.json',
+                              width: 160,
+                              height: 160,
+                              repeat: true,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              requests.isEmpty
+                                  ? 'No requests yet.\nTap "New Request" to get started!'
+                                  : 'No requests match\nthe selected filters.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 14, color: AppTheme.textMuted),
+                            ),
+                          ],
                         ),
                       ),
                     );
