@@ -180,10 +180,35 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                           // Label 9: profile, notification, logout icons
                           Row(
                             children: [
-                              _buildHeaderIcon(
-                                icon: Icons.account_circle_rounded,
+                              GestureDetector(
                                 onTap: () => Navigator.pushNamed(
                                     context, '/beneficiary-profile'),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.2),
+                                    border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.6),
+                                        width: 2),
+                                    image: user.profileImageUrl != null
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                                user.profileImageUrl!),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child: user.profileImageUrl == null
+                                      ? const Icon(
+                                          Icons.account_circle_rounded,
+                                          color: Colors.white,
+                                          size: 22)
+                                      : null,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               _buildHeaderIcon(

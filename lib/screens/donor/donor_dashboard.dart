@@ -161,14 +161,34 @@ class _DonorDashboardState extends State<DonorDashboard> {
                         ),
                       ),
                       Row(children: [
-                        IconButton(
-                            onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const DonorProfileScreen())),
-                            icon: const Icon(Icons.person_outline,
-                                color: Colors.white)),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const DonorProfileScreen())),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            margin: const EdgeInsets.only(right: 4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.2),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  width: 2),
+                              image: user.profileImageUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(user.profileImageUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: user.profileImageUrl == null
+                                ? const Icon(Icons.person_rounded,
+                                    color: Colors.white, size: 22)
+                                : null,
+                          ),
+                        ),
                         IconButton(
                             onPressed: () => Navigator.push(
                                 context,
