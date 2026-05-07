@@ -6,6 +6,7 @@ import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/screens/ai_chat_screen.dart';
 import 'package:helplink/screens/beneficiary/beneficiary_requests_screen.dart';
 import 'package:helplink/screens/beneficiary/new_request_screen.dart';
+import 'package:helplink/screens/beneficiary/beneficiary_request_detail_screen.dart';
 import 'package:helplink/screens/donor/chat_screen.dart';
 import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
@@ -553,6 +554,13 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                     selected: _filterCategory == cat,
                                     onTap: () =>
                                         setState(() => _filterCategory = cat),
+                                    leading: Icon(
+                                      _categoryIconData(cat),
+                                      size: 13,
+                                      color: _filterCategory == cat
+                                          ? Colors.white
+                                          : _categoryIconColor(cat),
+                                    ),
                                   ),
                                 ),
                             ],
@@ -634,12 +642,16 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                           ],
                         ),
                         const SizedBox(height: 12),
+                        _buildTipItem('Be clear and specific about what you need',
+                            icon: Icons.lightbulb_rounded,
+                            color: Colors.amber.shade700),
+                        _buildTipItem('Include your location for faster matching',
+                            icon: Icons.location_on_rounded,
+                            color: Colors.blue),
                         _buildTipItem(
-                            'Be clear and specific about what you need'),
-                        _buildTipItem(
-                            'Include your location for faster matching'),
-                        _buildTipItem(
-                            'Choose anonymous mode for privacy if needed'),
+                            'Choose anonymous mode for privacy if needed',
+                            icon: Icons.lock_rounded,
+                            color: Colors.green),
                       ],
                     ),
                   ),
@@ -681,12 +693,17 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                               color: AppTheme.textDark),
                         ),
                         const SizedBox(height: 8),
+                        _buildTipItem('Requests reset every Monday at 12:00 AM',
+                            icon: Icons.calendar_today_rounded,
+                            color: AppTheme.primaryPurple),
                         _buildTipItem(
-                            'Requests reset every Monday at 12:00 AM'),
+                            'Plan your requests carefully to ensure you get the help you need',
+                            icon: Icons.schedule_rounded,
+                            color: Colors.orange),
                         _buildTipItem(
-                            'Plan your requests carefully to ensure you get the help you need'),
-                        _buildTipItem(
-                            'Combine multiple needs into one request when possible'),
+                            'Combine multiple needs into one request when possible',
+                            icon: Icons.merge_type_rounded,
+                            color: Colors.teal),
                       ],
                     ),
                   ),
@@ -703,114 +720,164 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
 
   Widget _buildRequestCard(
       HelpRequest request, String userId, String userName) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: request.status == RequestStatus.matched
-              ? AppTheme.successGreen.withValues(alpha: 0.3)
-              : const Color(0xFFE2E8F0),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BeneficiaryRequestDetailScreen(
+            request: request,
+            userId: userId,
+            userName: userName,
+          ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  request.title,
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textDark),
-                ),
-              ),
-              _buildStatusBadge(request.status),
-            ],
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: request.status == RequestStatus.matched
+                ? AppTheme.successGreen.withValues(alpha: 0.3)
+                : const Color(0xFFE2E8F0),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              _categoryIcon(request.category),
-              const SizedBox(width: 5),
-              Text(request.categoryLabel,
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-            ],
-          ),
-          if (request.status == RequestStatus.matched &&
-              request.donorName != null) ...[
-            const SizedBox(height: 12),
-            Text('Donor: ${request.donorName}',
-                style:
-                    const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      request: request,
-                      currentUserId: userId,
-                      currentUserName: userName,
-                    ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    request.title,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textDark),
                   ),
-                );
-              },
-              child: Row(
+                ),
+                _buildStatusBadge(request.status),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _categoryIcon(request.category),
+            if (request.status == RequestStatus.matched &&
+                request.donorName != null) ...[
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Icon(Icons.forum_rounded,
-                      size: 16, color: AppTheme.primaryPurple),
-                  const SizedBox(width: 6),
-                  Text('Message',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primaryPurple)),
+                  const Icon(Icons.volunteer_activism_rounded,
+                      size: 14, color: AppTheme.successGreen),
+                  const SizedBox(width: 5),
+                  Text('Donor: ${request.donorName}',
+                      style: const TextStyle(
+                          fontSize: 13, color: AppTheme.textMuted)),
                 ],
               ),
-            ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatScreen(
+                        request: request,
+                        currentUserId: userId,
+                        currentUserName: userName,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryPurple,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.forum_rounded,
+                          size: 15, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text('Message',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _categoryIcon(RequestCategory category) {
-    IconData icon;
-    Color color;
+  IconData _categoryIconData(RequestCategory category) {
     switch (category) {
       case RequestCategory.food:
-        icon = Icons.restaurant_rounded;
-        color = Colors.orange;
-        break;
+        return Icons.restaurant_rounded;
       case RequestCategory.medical:
-        icon = Icons.medical_services_rounded;
-        color = Colors.red;
-        break;
+        return Icons.medical_services_rounded;
       case RequestCategory.education:
-        icon = Icons.menu_book_rounded;
-        color = Colors.green;
-        break;
+        return Icons.menu_book_rounded;
       case RequestCategory.transportation:
-        icon = Icons.directions_car_rounded;
-        color = Colors.amber.shade700;
-        break;
+        return Icons.directions_car_rounded;
       case RequestCategory.housing:
-        icon = Icons.house_rounded;
-        color = AppTheme.primaryPurple;
-        break;
+        return Icons.house_rounded;
       case RequestCategory.other:
-        icon = Icons.category_rounded;
-        color = AppTheme.primaryBlue;
-        break;
+        return Icons.category_rounded;
     }
-    return Icon(icon, size: 15, color: color);
+  }
+
+  Color _categoryIconColor(RequestCategory category) {
+    switch (category) {
+      case RequestCategory.food:
+        return Colors.orange;
+      case RequestCategory.medical:
+        return Colors.red;
+      case RequestCategory.education:
+        return Colors.green;
+      case RequestCategory.transportation:
+        return Colors.amber.shade700;
+      case RequestCategory.housing:
+        return AppTheme.primaryPurple;
+      case RequestCategory.other:
+        return AppTheme.primaryBlue;
+    }
+  }
+
+  Widget _categoryIcon(RequestCategory category) {
+    final color = _categoryIconColor(category);
+    final icon = _categoryIconData(category);
+    final label = category == RequestCategory.other
+        ? 'Others'
+        : category.name[0].toUpperCase() + category.name.substring(1);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+        ],
+      ),
+    );
   }
 
   Widget _buildStatusBadge(RequestStatus status) {
@@ -890,6 +957,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
     required String label,
     required bool selected,
     required VoidCallback onTap,
+    Widget? leading,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -903,26 +971,34 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
             color: selected ? AppTheme.primaryPurple : const Color(0xFFE2E8F0),
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selected ? Colors.white : AppTheme.textMuted,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (leading != null) ...[leading, const SizedBox(width: 5)],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: selected ? Colors.white : AppTheme.textMuted,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTipItem(String text) {
+  Widget _buildTipItem(String text,
+      {IconData icon = Icons.check_circle_outline_rounded,
+      Color color = Colors.green}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ',
-              style: TextStyle(fontSize: 14, color: AppTheme.textDark)),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
           Expanded(
               child: Text(text,
                   style: const TextStyle(
