@@ -1,7 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
+import 'package:helplink/models/user_model.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/screens/ai_chat_screen.dart';
@@ -20,11 +22,17 @@ class BeneficiaryDashboard extends StatefulWidget {
 }
 
 class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
+  static const _bgAsset =
+      'assets/images/thank-you-note-for-donation-examples.jpg';
+
   VoidCallback? _closeChat;
 
   // 0 = all time, otherwise number of days
   int _filterDays = 0;
   RequestCategory? _filterCategory;
+  final Set<String> _seenMatchIds = {};
+  final bool _verificationPromptShown = false;
+  Future<Map<String, int>>? _statsFuture;
 
   List<HelpRequest> _applyFilters(List<HelpRequest> requests) {
     var result = requests;
@@ -36,6 +44,128 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
       result = result.where((r) => r.category == _filterCategory).toList();
     }
     return result;
+  }
+
+  void _loadStats() {
+    final fs = Provider.of<FirestoreService>(context, listen: false);
+    final user = Provider.of<AuthService>(context, listen: false).userModel;
+    if (user == null) return;
+    setState(() {
+      _statsFuture = fs.getBeneficiaryStats(user.uid);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_statsFuture == null) {
+      precacheImage(
+          ResizeImage(const AssetImage(_bgAsset), width: 800), context);
+      _loadStats();
+    }
+  }
+
+  Widget _buildStatsSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: FutureBuilder<Map<String, int>>(
+        future: _statsFuture,
+        builder: (context, snapshot) {
+          final stats = snapshot.data;
+          final total = stats?['total'] ?? 0;
+          final active = stats?['active'] ?? 0;
+          final completed = stats?['completed'] ?? 0;
+          final loading = snapshot.connectionState == ConnectionState.waiting;
+
+          return Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryPurple.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryPurple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.insights_rounded,
+                            color: AppTheme.primaryPurple, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('Your Activity',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textDark)),
+                      const Spacer(),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Stats row ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        _statBox(loading ? '–' : '$total', 'Total\nSubmitted',
+                            AppTheme.primaryPurple),
+                        Container(width: 1, color: const Color(0xFFE2E8F0)),
+                        _statBox(loading ? '–' : '$active', 'Active',
+                            AppTheme.primaryBlue),
+                        Container(width: 1, color: const Color(0xFFE2E8F0)),
+                        _statBox(loading ? '–' : '$completed', 'Completed',
+                            AppTheme.successGreen),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _statBox(String value, String label, Color color) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          children: [
+            Text(value,
+                style: TextStyle(
+                    fontSize: 26, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -55,6 +185,13 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    final initials = user.fullName.trim().split(' ').where((w) => w.isNotEmpty).map((w) => w[0]).take(2).join().toUpperCase();
+    final initialsWidget = Center(
+      child: Text(initials,
+          style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
@@ -109,8 +246,9 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                   r.status == RequestStatus.matched ||
                   r.status == RequestStatus.active)
               .length;
-          final bool hasNewMatch =
-              requests.any((r) => r.status == RequestStatus.matched);
+          final bool hasNewMatch = requests
+              .where((r) => r.status == RequestStatus.matched)
+              .any((r) => !_seenMatchIds.contains(r.id));
 
           return SingleChildScrollView(
             child: Column(
@@ -120,7 +258,13 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: ResizeImage(
+                          const AssetImage(_bgAsset), width: 800),
+                      fit: BoxFit.cover,
+                      opacity: 0.6,
+                    ),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -148,14 +292,14 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                 const Text(
                                   'Welcome back,',
                                   style: TextStyle(
-                                      fontSize: 14, color: Colors.white70),
+                                      fontSize: 14, color: Colors.black54),
                                 ),
                                 Text(
                                   user.fullName,
                                   style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: Colors.black87,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -164,7 +308,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
+                                    color: AppTheme.primaryPurple,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: const Text(
@@ -189,41 +333,71 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                   height: 40,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color:
-                                        Colors.white.withValues(alpha: 0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.6),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.6),
                                         width: 2),
-                                    image: user.profileImageUrl != null
-                                        ? DecorationImage(
-                                            image: NetworkImage(
-                                                user.profileImageUrl!),
-                                            fit: BoxFit.cover,
-                                          )
-                                        : null,
                                   ),
-                                  child: user.profileImageUrl == null
-                                      ? const Icon(
-                                          Icons.account_circle_rounded,
-                                          color: Colors.white,
-                                          size: 22)
-                                      : null,
+                                  child: ClipOval(
+                                    child: user.profileImageUrl != null
+                                        ? CachedNetworkImage(
+                                            imageUrl: user.profileImageUrl!,
+                                            fit: BoxFit.cover,
+                                            width: 40,
+                                            height: 40,
+                                            memCacheWidth: 80,
+                                            memCacheHeight: 80,
+                                            placeholder: (_, __) => initialsWidget,
+                                            errorWidget: (_, __, ___) => initialsWidget,
+                                          )
+                                        : initialsWidget,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              _buildHeaderIcon(
-                                icon: Icons.notifications_active_rounded,
+                              GestureDetector(
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                       builder: (_) =>
                                           NotificationScreen(user: user)),
                                 ),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                      Icons.notifications_active_rounded,
+                                      color: Colors.black,
+                                      size: 22),
+                                ),
                               ),
                               const SizedBox(width: 8),
-                              _buildHeaderIcon(
-                                icon: Icons.logout,
+                              GestureDetector(
+                                onTap: () async {
+                                  await authService.setActiveRole(UserRole.donor);
+                                  if (context.mounted) {
+                                    Navigator.pushReplacementNamed(
+                                        context, '/donor-dashboard');
+                                  }
+                                },
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.swap_horiz_rounded,
+                                      color: Colors.black, size: 22),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
                                 onTap: () async {
                                   final navigator = Navigator.of(context);
                                   await authService.signOut();
@@ -231,6 +405,16 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                     navigator.pushReplacementNamed('/login');
                                   }
                                 },
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(Icons.logout,
+                                      color: Colors.black, size: 22),
+                                ),
                               ),
                             ],
                           ),
@@ -239,86 +423,113 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                       const SizedBox(height: 20),
                       // Label 2: Active Requests count — tappable, navigates to Ongoing Requests
                       GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  const BeneficiaryRequestsScreen()),
-                        ),
+                        onTap: () {
+                          // Mark all matched requests as seen
+                          final matchedRequests = requests
+                              .where((r) => r.status == RequestStatus.matched)
+                              .map((r) => r.id)
+                              .toSet();
+                          setState(() {
+                            _seenMatchIds.addAll(matchedRequests);
+                          });
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const BeneficiaryRequestsScreen()),
+                          );
+                        },
                         child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                    Icons.pending_actions_rounded,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Active Requests',
-                                        style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.white70)),
-                                    const SizedBox(height: 4),
-                                    Text('$active',
-                                        style: const TextStyle(
-                                            fontSize: 36,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (hasNewMatch)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: AppTheme.successGreen,
-                                    borderRadius: BorderRadius.circular(20)),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Lottie.asset(
-                                      'assets/lottie/new_match.json',
-                                      width: 28,
-                                      height: 28,
-                                      repeat: true,
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color:
+                                AppTheme.primaryPurple.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(14),
                                     ),
-                                    const SizedBox(width: 4),
-                                    const Text('New Match!',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white)),
-                                  ],
-                                ),
+                                    child: const Icon(
+                                      Icons.pending_actions_rounded,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Active Requests',
+                                          style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.white70)),
+                                      const SizedBox(height: 4),
+                                      Text('$active',
+                                          style: const TextStyle(
+                                              fontSize: 36,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white)),
+                                    ],
+                                  ),
+                                ],
                               ),
-                          ],
+                              if (hasNewMatch)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                      color: AppTheme.successGreen,
+                                      borderRadius: BorderRadius.circular(20)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white24,
+                                        ),
+                                        child: Lottie.asset(
+                                          'assets/lottie/new_match.json',
+                                          width: 20,
+                                          height: 20,
+                                          repeat: true,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Text('New Match!',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
                       ),
                     ],
                   ),
                 ),
+
+                const SizedBox(height: 16),
+
+                // ─── Statistics Dashboard ───
+                _buildStatsSection(),
 
                 const SizedBox(height: 16),
 
@@ -342,7 +553,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                 borderRadius: BorderRadius.circular(16)),
                             child: const Column(
                               children: [
-                                Icon(Icons.add_circle_rounded, color: Colors.white, size: 32),
+                                Icon(Icons.add_circle_rounded,
+                                    color: Colors.white, size: 32),
                                 SizedBox(height: 8),
                                 Text('New Request',
                                     style: TextStyle(
@@ -366,8 +578,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                  color: const Color(0xFFE2E8F0)),
+                              border:
+                                  Border.all(color: const Color(0xFFE2E8F0)),
                             ),
                             child: const Column(
                               children: [
@@ -440,16 +652,12 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                         color: AppTheme.errorRed,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          Lottie.asset(
-                            'assets/lottie/sos.json',
-                            width: 40,
-                            height: 40,
-                            repeat: true,
-                          ),
-                          const SizedBox(width: 8),
-                          const Column(
+                          Icon(Icons.crisis_alert_rounded,
+                              color: Colors.white, size: 28),
+                          SizedBox(width: 12),
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('SOS - Emergency Assistance',
@@ -468,7 +676,82 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+
+                // ─── Mental Health Support Button ───
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: GestureDetector(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Row(
+                            children: [
+                              Icon(Icons.psychology_rounded,
+                                  color: AppTheme.primaryPurple),
+                              SizedBox(width: 8),
+                              Text('Mental Health Support'),
+                            ],
+                          ),
+                          content: const Text(
+                            'Here are some helplines you can contact for mental health support:\n\n'
+                            'Malaysia: Befrienders Kuala Lumpur (03-7956 8145)\n'
+                            'Singapore: Samaritans of Singapore (1800-221 4444)\n'
+                            'International: Befrienders Worldwide\n\n'
+                            'Please seek professional help if needed.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 200,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 24),
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: AssetImage(
+                              'assets/images/MHH-Asking-for-Help-with-Mental-Health-A-Sign-of-Strength-1024x536.png'),
+                          fit: BoxFit.cover,
+                          opacity: 0.7,
+                        ),
+                        color: AppTheme.primaryPurple.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.psychology_rounded,
+                              color: Colors.white, size: 36),
+                          SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Mental Health Support',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white)),
+                              Text('Get help when you need it',
+                                  style: TextStyle(
+                                      fontSize: 14, color: Colors.white70)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
 
                 // ─── Label 8: Your Requests list ───
                 Padding(
@@ -631,7 +914,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 32, horizontal: 24),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
@@ -697,10 +981,12 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        _buildTipItem('Be clear and specific about what you need',
+                        _buildTipItem(
+                            'Be clear and specific about what you need',
                             icon: Icons.lightbulb_rounded,
                             color: Colors.amber.shade700),
-                        _buildTipItem('Include your location for faster matching',
+                        _buildTipItem(
+                            'Include your location for faster matching',
                             icon: Icons.location_on_rounded,
                             color: Colors.blue),
                         _buildTipItem(
@@ -846,8 +1132,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryPurple,
                     borderRadius: BorderRadius.circular(20),
@@ -855,8 +1141,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.forum_rounded,
-                          size: 15, color: Colors.white),
+                      Icon(Icons.forum_rounded, size: 15, color: Colors.white),
                       SizedBox(width: 6),
                       Text('Message',
                           style: TextStyle(
@@ -927,9 +1212,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
           const SizedBox(width: 5),
           Text(label,
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color)),
+                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
@@ -981,29 +1264,9 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
           Text(
             status.name[0].toUpperCase() + status.name.substring(1),
             style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: textColor),
+                fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderIcon({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: Colors.white, size: 22),
       ),
     );
   }
@@ -1056,8 +1319,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
           const SizedBox(width: 8),
           Expanded(
               child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 14, color: AppTheme.textDark))),
+                  style:
+                      const TextStyle(fontSize: 14, color: AppTheme.textDark))),
         ],
       ),
     );

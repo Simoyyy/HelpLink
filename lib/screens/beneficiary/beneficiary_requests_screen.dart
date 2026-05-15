@@ -31,7 +31,7 @@ class _BeneficiaryRequestsScreenState
     final topPad = MediaQuery.of(context).padding.top;
 
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120)));
     }
 
     final firestoreService = Provider.of<FirestoreService>(context);
@@ -61,14 +61,17 @@ class _BeneficiaryRequestsScreenState
                   child: const Icon(Icons.arrow_back,
                       color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Ongoing Requests',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                const Expanded(
+                  child: Text(
+                    'Ongoing Requests',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
+                  ),
                 ),
+                const SizedBox(width: 24),
               ],
             ),
           ),
@@ -79,7 +82,7 @@ class _BeneficiaryRequestsScreenState
               stream: firestoreService.getBeneficiaryRequests(user.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
                 }
 
                 final all = snapshot.data ?? [];

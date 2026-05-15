@@ -6,6 +6,8 @@ import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/models/message_model.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
+import 'package:helplink/utils/donor_badges.dart';
+import 'package:helplink/utils/beneficiary_profile.dart';
 import 'package:intl/intl.dart';
 import 'package:record/record.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -99,7 +101,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     final path =
         '${Directory.systemTemp.path}/helplink_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
-    await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav), path: path);
+    await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav),
+        path: path);
     setState(() => _isRecording = true);
   }
 
@@ -111,11 +114,13 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _isTranscribing = true);
     try {
       final bytes = await File(path).readAsBytes();
-      final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: _geminiApiKey);
+      final model =
+          GenerativeModel(model: 'gemini-2.0-flash', apiKey: _geminiApiKey);
       final response = await model.generateContent([
         Content.multi([
           DataPart('audio/wav', bytes),
-          TextPart('Transcribe this audio exactly as spoken. Return only the transcribed text, nothing else.'),
+          TextPart(
+              'Transcribe this audio exactly as spoken. Return only the transcribed text, nothing else.'),
         ]),
       ]);
       final transcribed = response.text?.trim() ?? '';
@@ -125,12 +130,16 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Transcription failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Transcription failed: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isTranscribing = false);
-      try { await File(path).delete(); } catch (_) {}
+      try {
+        await File(path).delete();
+      } catch (_) {}
     }
   }
 
@@ -169,7 +178,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         _messageController.text = text; // restore the message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Failed to send: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -198,8 +208,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon:
-                        const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                   const SizedBox(width: 4),
                   // Chat icon
@@ -233,6 +242,16 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             const SizedBox(width: 8),
                             _buildHeaderRoleBadge(_otherUserRole),
+                            if (_otherUserRole == 'Donor' &&
+                                widget.request.donorId != null) ...[
+                              const SizedBox(width: 6),
+                              DonorBadgeChip(donorId: widget.request.donorId!),
+                            ],
+                            if (_isDonor) ...[
+                              const SizedBox(width: 6),
+                              BeneficiaryStatsChip(
+                                  beneficiaryId: widget.request.beneficiaryId),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -258,7 +277,9 @@ class _ChatScreenState extends State<ChatScreen> {
               stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return Center(
+                      child: Lottie.asset('assets/lottie/loading.json',
+                          width: 120, height: 120));
                 }
                 if (snapshot.hasError) {
                   return Center(
@@ -343,7 +364,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   Icon(Icons.mic, color: Colors.red.shade400, size: 16),
                   const SizedBox(width: 6),
                   Text('Recording… release to transcribe',
-                      style: TextStyle(color: Colors.red.shade400, fontSize: 13)),
+                      style:
+                          TextStyle(color: Colors.red.shade400, fontSize: 13)),
                 ],
               ),
             ),
@@ -398,13 +420,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: _isTranscribing
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? Lottie.asset('assets/lottie/loading.json',
+                            width: 44, height: 44, fit: BoxFit.contain)
                         : Icon(
                             Icons.mic,
-                            color: _isRecording ? Colors.white : Colors.grey.shade600,
+                            color: _isRecording
+                                ? Colors.white
+                                : Colors.grey.shade600,
                             size: 22,
                           ),
                   ),
@@ -446,8 +468,8 @@ class _ChatScreenState extends State<ChatScreen> {
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         child: Column(
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -477,43 +499,43 @@ class _ChatScreenState extends State<ChatScreen> {
 
             // Message bubble
             IntrinsicWidth(
-             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: bubbleColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    message.content,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Colors.white,
-                    ),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(16),
+                    topRight: const Radius.circular(16),
+                    bottomLeft: Radius.circular(isMe ? 16 : 4),
+                    bottomRight: Radius.circular(isMe ? 4 : 16),
                   ),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Text(
-                      DateFormat.jm().format(message.timestamp),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.7),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      message.content,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: Text(
+                        DateFormat.jm().format(message.timestamp),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-             ),
             ),
           ],
         ),
@@ -550,7 +572,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInlineRoleBadge(String role) {
     final color =
-        role == 'Donor' ? AppTheme.warningOrange : AppTheme.primaryPurple;
+        role == 'Donor' ? AppTheme.primaryBlue : AppTheme.primaryPurple;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

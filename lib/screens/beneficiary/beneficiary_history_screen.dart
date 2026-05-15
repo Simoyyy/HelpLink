@@ -25,7 +25,7 @@ class BeneficiaryHistoryScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       body: user == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120))
           : _HistoryContent(userId: user.uid, userName: user.fullName),
     );
   }
@@ -120,23 +120,27 @@ class _HistoryContentState extends State<_HistoryContent> {
                 child: const Icon(Icons.arrow_back,
                     color: Colors.white, size: 24),
               ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Request History',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  Text(
-                    'View all your help requests',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
-                  ),
-                ],
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Request History',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    Text(
+                      'View all your help requests',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 24),
             ],
           ),
         ),
@@ -224,7 +228,7 @@ class _HistoryContentState extends State<_HistoryContent> {
             stream: fs.getBeneficiaryRequests(widget.userId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
               }
 
               final filtered = _applyFilters(snapshot.data ?? []);

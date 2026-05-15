@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/services/firestore_service.dart';
@@ -105,23 +106,27 @@ class _EditRequestScreenState extends State<EditRequestScreen> {
                   child: const Icon(Icons.arrow_back,
                       color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Edit Help Request',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                    ),
-                    Text(
-                      'Update your request details',
-                      style: TextStyle(fontSize: 13, color: Colors.white70),
-                    ),
-                  ],
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Edit Help Request',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      Text(
+                        'Update your request details',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 24),
               ],
             ),
           ),
@@ -264,11 +269,10 @@ class _EditRequestScreenState extends State<EditRequestScreen> {
                               borderRadius: BorderRadius.circular(14)),
                         ),
                         child: _isLoading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 24,
                                 width: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5, color: Colors.white))
+                                child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain))
                             : const Text(
                                 'Update Request',
                                 style: TextStyle(

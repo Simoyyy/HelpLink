@@ -18,9 +18,7 @@ class RecommendedRequest {
 }
 
 class AIService {
-  // Get your FREE Gemini API key at: https://aistudio.google.com/app/apikey
-  // Replace 'YOUR_GEMINI_API_KEY' with your actual key.
-  static const String _apiKey = 'AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8';
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
   static const int _maxRecommendations = 3;
 
   bool get _hasApiKey => _apiKey.isNotEmpty && !_apiKey.startsWith('YOUR_');

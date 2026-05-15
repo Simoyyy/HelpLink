@@ -6,6 +6,7 @@ import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/screens/donor/chat_screen.dart';
 import 'package:helplink/screens/beneficiary/edit_request_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
+import 'package:helplink/utils/donor_badges.dart';
 
 class BeneficiaryRequestDetailScreen extends StatelessWidget {
   final HelpRequest request;
@@ -60,14 +61,17 @@ class BeneficiaryRequestDetailScreen extends StatelessWidget {
                       child: const Icon(Icons.arrow_back,
                           color: Colors.white, size: 24),
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Request Details',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
+                    const Expanded(
+                      child: Text(
+                        'Request Details',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
                     ),
+                    const SizedBox(width: 24),
                   ],
                 ),
               ),
@@ -140,6 +144,10 @@ class BeneficiaryRequestDetailScreen extends StatelessWidget {
                                 icon: Icons.volunteer_activism_outlined,
                                 label: 'Donor',
                                 value: liveRequest.donorName!,
+                                trailing: liveRequest.donorId != null
+                                    ? DonorBadgeChip(
+                                        donorId: liveRequest.donorId!)
+                                    : null,
                               ),
                             ],
                             const SizedBox(height: 16),
@@ -371,13 +379,17 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
   const _InfoRow(
-      {required this.icon, required this.label, required this.value});
+      {required this.icon,
+      required this.label,
+      required this.value,
+      this.trailing});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
           width: 36,
@@ -405,6 +417,10 @@ class _InfoRow extends StatelessWidget {
             ],
           ),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing!,
+        ],
       ],
     );
   }

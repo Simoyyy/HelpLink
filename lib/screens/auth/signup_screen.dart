@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
-import 'package:helplink/models/user_model.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 
@@ -17,7 +16,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  UserRole _selectedRole = UserRole.beneficiary;
   bool _obscurePassword = true;
   String? _errorMessage;
 
@@ -37,7 +35,6 @@ class _SignupScreenState extends State<SignupScreen> {
       fullName: _nameController.text,
       email: _emailController.text,
       password: _passwordController.text,
-      role: _selectedRole,
     );
 
     if (mounted) {
@@ -70,25 +67,27 @@ class _SignupScreenState extends State<SignupScreen> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
-
                 const SizedBox(height: 4),
                 Center(
                   child: Lottie.asset(
-                    'assets/lottie/auth.json',
-                    width: 160,
-                    height: 160,
+                    'assets/lottie/Waving.json',
+                    width: 280,
+                    height: 280,
                     repeat: true,
                   ),
                 ),
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDark,
+                Transform.translate(
+                  offset: const Offset(0, -24),
+                  child: const Text(
+                    'Create Account',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textDark,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 2),
                 const Text(
                   'Join the HelpLink community today',
                   style: TextStyle(
@@ -97,7 +96,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
 
                 if (_errorMessage != null) ...[
                   Container(
@@ -124,7 +123,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                // Full Name
                 const Text(
                   'Full Name',
                   style: TextStyle(
@@ -133,7 +131,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: AppTheme.textDark,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
@@ -152,9 +150,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-                // Email
                 const Text(
                   'Email',
                   style: TextStyle(
@@ -163,7 +160,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: AppTheme.textDark,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -185,9 +182,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-                // Password
                 const Text(
                   'Password',
                   style: TextStyle(
@@ -196,7 +192,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: AppTheme.textDark,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -229,37 +225,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
 
-                const SizedBox(height: 24),
-
-                // Role selector
-                const Text(
-                  'I want to register as',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _buildRoleChip(
-                      label: 'Beneficiary',
-                      role: UserRole.beneficiary,
-                      color: AppTheme.primaryPurple,
-                    ),
-                    const SizedBox(width: 12),
-                    _buildRoleChip(
-                      label: 'Donor',
-                      role: UserRole.donor,
-                      color: AppTheme.primaryBlue,
-                    ),
-                  ],
-                ),
-
                 const SizedBox(height: 32),
 
-                // Create Account button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -272,13 +239,10 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     child: authService.isLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 24,
                             width: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
+                            child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain),
                           )
                         : const Text(
                             'Create Account',
@@ -320,37 +284,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 32),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleChip({
-    required String label,
-    required UserRole role,
-    required Color color,
-  }) {
-    final isSelected = _selectedRole == role;
-
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRole = role),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: isSelected ? color : const Color(0xFFE2E8F0),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? color : AppTheme.textMuted,
           ),
         ),
       ),

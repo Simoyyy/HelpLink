@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,6 +7,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
     // Add the Google services Gradle plugin
     id("com.google.gms.google-services")
+}
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -30,6 +37,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY", "")
     }
 
     buildTypes {

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
     <application
         android:label="helplink"
         android:name="${applicationName}"
@@ -37,7 +38,7 @@
         <!-- Google Maps API Key — replace with your actual key from Google Cloud Console -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBqfr87UoDwLJzUHPkJL23ImfFbBUFs8co"/>
+            android:value="${MAPS_API_KEY}"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

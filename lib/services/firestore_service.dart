@@ -67,8 +67,12 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// Stream all available help requests for donors (pending only)
-  Stream<List<HelpRequest>> getAvailableRequests({RequestCategory? category}) {
+  /// Stream all available help requests for donors (pending only).
+  /// Requests submitted by [excludeUserId] are filtered out client-side.
+  Stream<List<HelpRequest>> getAvailableRequests({
+    RequestCategory? category,
+    String? excludeUserId,
+  }) {
     Query query = _firestore
         .collection(AppConstants.helpRequestsCollection)
         .where('status', isEqualTo: RequestStatus.pending.name)
@@ -82,8 +86,13 @@ class FirestoreService {
           .orderBy('createdAt', descending: true);
     }
 
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
+    return query.snapshots().map((snapshot) {
+      final requests = snapshot.docs
+          .map((doc) => HelpRequest.fromFirestore(doc))
+          .toList();
+      if (excludeUserId == null) return requests;
+      return requests.where((r) => r.beneficiaryId != excludeUserId).toList();
+    });
   }
 
   /// Stream donor's active assistance
@@ -129,8 +138,12 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// One-time fetch of available (pending) requests for AI matching
-  Future<List<HelpRequest>> getAvailableRequestsOnce({int limit = 20}) async {
+  /// One-time fetch of available (pending) requests for AI matching.
+  /// Requests submitted by [excludeUserId] are filtered out.
+  Future<List<HelpRequest>> getAvailableRequestsOnce({
+    int limit = 20,
+    String? excludeUserId,
+  }) async {
     try {
       final snapshot = await _firestore
           .collection(AppConstants.helpRequestsCollection)
@@ -138,9 +151,11 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
-      return snapshot.docs
+      final all = snapshot.docs
           .map((doc) => HelpRequest.fromFirestore(doc))
           .toList();
+      if (excludeUserId == null) return all;
+      return all.where((r) => r.beneficiaryId != excludeUserId).toList();
     } catch (e) {
       return [];
     }

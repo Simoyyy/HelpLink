@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
+import 'package:helplink/utils/beneficiary_profile.dart';
 import 'package:intl/intl.dart';
 
 const List<String> _ratingLabels = [
@@ -176,14 +178,18 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                         icon: const Icon(Icons.arrow_back,
                             color: Colors.white),
                       ),
-                      const Text(
-                        'Request Details',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      const Expanded(
+                        child: Text(
+                          'Request Details',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 48),
                     ],
                   ),
                 ),
@@ -261,6 +267,12 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                       _currentRequest.donorName!,
                     ),
                   ],
+
+                  const SizedBox(height: 16),
+                  BeneficiaryProfileCard(
+                    beneficiaryId: _currentRequest.beneficiaryId,
+                    showVerification: !_currentRequest.isAnonymous,
+                  ),
 
                   const SizedBox(height: 24),
 
@@ -371,11 +383,10 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _isLoading ? null : _offerHelp,
                         icon: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2),
+                            ? SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain),
                               )
                             : Icon(
                                 _acceptAnonymously

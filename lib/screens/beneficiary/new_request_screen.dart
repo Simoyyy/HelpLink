@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart' hide Marker;
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -27,7 +30,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
   bool _isAnonymous = false;
   bool _isLoading = false;
   bool _isLoadingLocation = false;
-  bool _showMap = false;
+  bool _showMap = true;
 
   double? _selectedLat;
   double? _selectedLng;
@@ -72,16 +75,39 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
+      // Show map instantly with cached position, then refine
+      Position? position;
+      try {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null && mounted) {
+          setState(() {
+            _selectedLat = last.latitude;
+            _selectedLng = last.longitude;
+            _showMap = true;
+            _markers = {
+              Marker(
+                markerId: const MarkerId('selected'),
+                position: LatLng(last.latitude, last.longitude),
+              ),
+            };
+          });
+          _mapController?.animateCamera(
+            CameraUpdate.newLatLngZoom(
+                LatLng(last.latitude, last.longitude), 15),
+          );
+        }
+      } catch (_) {}
+
+      position = await Geolocator.getCurrentPosition(
         locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
+            const LocationSettings(accuracy: LocationAccuracy.medium),
       );
 
       final address = await _reverseGeocode(position.latitude, position.longitude);
 
       if (mounted) {
         setState(() {
-          _selectedLat = position.latitude;
+          _selectedLat = position!.latitude;
           _selectedLng = position.longitude;
           _locationController.text = address;
           _showMap = true;
@@ -104,27 +130,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
     }
   }
 
-  void _onMapTap(LatLng position) async {
-    setState(() {
-      _selectedLat = position.latitude;
-      _selectedLng = position.longitude;
-      _isLoadingLocation = true;
-      _markers = {
-        Marker(
-          markerId: const MarkerId('selected'),
-          position: position,
-        ),
-      };
-    });
-    try {
-      final address =
-          await _reverseGeocode(position.latitude, position.longitude);
-      if (mounted) setState(() => _locationController.text = address);
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _isLoadingLocation = false);
-    }
-  }
+
 
   Future<void> _searchLocation(String query) async {
     if (query.trim().isEmpty) return;
@@ -166,6 +172,38 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
     return [p.name, p.subLocality, p.locality, p.administrativeArea, p.country]
         .where((s) => s != null && s.isNotEmpty)
         .join(', ');
+  }
+
+  // ── Full-screen map picker ───────────────────────────────────────────────────
+
+  Future<void> _openFullScreenMap() async {
+    final result = await Navigator.push<_MapPickResult>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _FullScreenMapPicker(
+          initialPosition: _selectedLat != null
+              ? LatLng(_selectedLat!, _selectedLng!)
+              : null,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _selectedLat = result.latLng.latitude;
+      _selectedLng = result.latLng.longitude;
+      _locationController.text = result.address;
+      _showMap = true;
+      _markers = {
+        Marker(
+          markerId: const MarkerId('selected'),
+          position: result.latLng,
+        ),
+      };
+    });
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(result.latLng, 15),
+    );
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
@@ -249,23 +287,27 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                   child: const Icon(Icons.arrow_back,
                       color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Create Help Request',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                    ),
-                    Text(
-                      'Tell us what assistance you need',
-                      style: TextStyle(fontSize: 13, color: Colors.white70),
-                    ),
-                  ],
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Create Help Request',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      Text(
+                        'Tell us what assistance you need',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 24),
               ],
             ),
           ),
@@ -364,33 +406,17 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                         hintText: 'e.g., UNIMAS, Kota Samarahan, Sarawak',
                         prefixIcon: const Icon(Icons.location_on_outlined,
                             color: AppTheme.primaryPurple),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: _isLoadingLocation
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppTheme.primaryPurple),
-                                    )
-                                  : const Icon(Icons.search,
-                                      color: AppTheme.primaryPurple),
-                              onPressed: () => _searchLocation(
-                                  _locationController.text),
-                              tooltip: 'Search location',
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                  _showMap ? Icons.map : Icons.map_outlined,
+                        suffixIcon: IconButton(
+                          icon: _isLoadingLocation
+                              ? SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain),
+                                )
+                              : const Icon(Icons.search,
                                   color: AppTheme.primaryPurple),
-                              onPressed: () =>
-                                  setState(() => _showMap = !_showMap),
-                              tooltip: _showMap ? 'Close map' : 'Show map',
-                            ),
-                          ],
+                          onPressed: () => _searchLocation(_locationController.text),
+                          tooltip: 'Search location',
                         ),
                       ),
                       validator: (v) => v == null || v.trim().isEmpty
@@ -417,11 +443,10 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                               borderRadius: BorderRadius.circular(14)),
                         ),
                         child: _isLoading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 24,
                                 width: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5, color: Colors.white))
+                                child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain))
                             : const Text(
                                 'Submit Request',
                                 style: TextStyle(
@@ -554,12 +579,10 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
               child: Row(
                 children: [
                   if (_isLoadingLocation)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.primaryPurple),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain),
                     )
                   else
                     const Icon(Icons.navigation,
@@ -579,41 +602,56 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
 
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-          // Google Map – tap to pick location
-          SizedBox(
-            height: 220,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: center,
-                zoom: _selectedLat != null ? 15 : 11,
+          // Google Map – tap anywhere to open full-screen picker
+          Stack(
+            children: [
+              SizedBox(
+                height: 220,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: center,
+                    zoom: _selectedLat != null ? 15 : 11,
+                  ),
+                  onMapCreated: (controller) => _mapController = controller,
+                  markers: _markers,
+                  onTap: (_) => _openFullScreenMap(),
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  scrollGesturesEnabled: false,
+                  zoomGesturesEnabled: false,
+                  rotateGesturesEnabled: false,
+                  tiltGesturesEnabled: false,
+                ),
               ),
-              onMapCreated: (controller) => _mapController = controller,
-              markers: _markers,
-              onTap: _onMapTap,
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: true,
-            ),
+              // Expand hint overlay
+              Positioned(
+                top: 10,
+                right: 10,
+                child: GestureDetector(
+                  onTap: _openFullScreenMap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.open_in_full_rounded, size: 14, color: AppTheme.primaryPurple),
+                        SizedBox(width: 4),
+                        Text('Tap to expand', style: TextStyle(fontSize: 11, color: AppTheme.primaryPurple, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-          // "Close map" row
-          InkWell(
-            onTap: () => setState(() => _showMap = false),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.close, size: 16, color: AppTheme.textMuted),
-                  SizedBox(width: 6),
-                  Text('Close map',
-                      style: TextStyle(
-                          fontSize: 14, color: AppTheme.textMuted)),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -678,5 +716,226 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppTheme.textDark));
+  }
+}
+
+// ── Full-screen map picker ────────────────────────────────────────────────────
+
+class _MapPickResult {
+  final LatLng latLng;
+  final String address;
+  const _MapPickResult({required this.latLng, required this.address});
+}
+
+class _FullScreenMapPicker extends StatefulWidget {
+  final LatLng? initialPosition;
+  const _FullScreenMapPicker({this.initialPosition});
+
+  @override
+  State<_FullScreenMapPicker> createState() => _FullScreenMapPickerState();
+}
+
+class _FullScreenMapPickerState extends State<_FullScreenMapPicker> {
+  static const LatLng _default = LatLng(1.4582, 110.4387);
+
+  GoogleMapController? _controller;
+  LatLng? _picked;
+  Set<Marker> _markers = {};
+  String _address = '';
+  bool _isGeocoding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPosition != null) {
+      _picked = widget.initialPosition;
+      _markers = {
+        Marker(markerId: const MarkerId('picked'), position: widget.initialPosition!),
+      };
+      _address = 'Loading address…';
+      _geocode(widget.initialPosition!);
+    }
+  }
+
+  Future<void> _onTap(LatLng pos) async {
+    setState(() {
+      _picked = pos;
+      _markers = {Marker(markerId: const MarkerId('picked'), position: pos)};
+      _address = '';
+      _isGeocoding = true;
+    });
+    await _geocode(pos);
+  }
+
+  Future<void> _geocode(LatLng pos) async {
+    try {
+      final marks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      if (marks.isNotEmpty) {
+        final p = marks.first;
+        setState(() {
+          _address = [p.name, p.subLocality, p.locality, p.administrativeArea, p.country]
+              .where((s) => s != null && s.isNotEmpty)
+              .join(', ');
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _address =
+              '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isGeocoding = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = widget.initialPosition ?? _default;
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Full-screen map
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: initial,
+              zoom: widget.initialPosition != null ? 15 : 11,
+            ),
+            onMapCreated: (c) => _controller = c,
+            markers: _markers,
+            onTap: _onTap,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: true,
+            mapToolbarEnabled: false,
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: true,
+            gestureRecognizers: {
+              Factory<OneSequenceGestureRecognizer>(
+                  () => EagerGestureRecognizer()),
+            },
+          ),
+
+          // Top bar: back button + address pill
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 3,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: AppTheme.textDark),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      elevation: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 16, color: AppTheme.primaryPurple),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _picked == null
+                                    ? 'Tap the map to pin your location'
+                                    : _isGeocoding
+                                        ? 'Getting address…'
+                                        : _address.isNotEmpty
+                                            ? _address
+                                            : 'Location selected',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _picked == null
+                                      ? AppTheme.textMuted
+                                      : AppTheme.textDark,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom: confirm button or hint
+          Positioned(
+            bottom: 32,
+            left: 24,
+            right: 24,
+            child: _picked == null
+                ? Center(
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      elevation: 3,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        child: Text(
+                          'Tap anywhere on the map to pin your location',
+                          style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                : ElevatedButton(
+                    onPressed: _isGeocoding
+                        ? null
+                        : () => Navigator.pop(
+                              context,
+                              _MapPickResult(latLng: _picked!, address: _address),
+                            ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryPurple,
+                      disabledBackgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.6),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 4,
+                    ),
+                    child: _isGeocoding
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : const Text(
+                            'Confirm Location',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white),
+                          ),
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 }

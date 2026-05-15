@@ -23,11 +23,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   bool get _isDonor => widget.user.role == UserRole.donor;
 
-  List<Color> get _gradient => _isDonor
-      ? [AppTheme.donorGradientStart, AppTheme.donorGradientEnd]
-      : [AppTheme.beneficiaryGradientStart, AppTheme.beneficiaryGradientEnd];
+  List<Color> get _gradient =>
+      const [Color(0xFF9333EA), Color(0xFF06B6D4)];
 
-  Color get _accent => _isDonor ? AppTheme.primaryBlue : AppTheme.primaryPurple;
+  Color get _accent => const Color(0xFF9333EA);
 
   @override
   Widget build(BuildContext context) {
@@ -67,14 +66,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const Text(
-            'Notifications',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          const Expanded(
+            child: Text(
+              'Notifications',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -142,7 +145,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       stream: firestoreService.getAnnouncements(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
         }
         final items = snapshot.data ?? [];
         if (items.isEmpty) {
@@ -221,7 +224,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
         }
         final requests = snapshot.data ?? [];
         if (requests.isEmpty) {

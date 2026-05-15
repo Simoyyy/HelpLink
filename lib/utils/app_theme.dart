@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color primaryBlue = Color(0xFF2563EB);
-  static const Color primaryPurple = Color(0xFF7C3AED);
+  static const Color primaryPurple = Color(0xFF8B5CF6);
   static const Color successGreen = Color(0xFF22C55E);
   static const Color warningOrange = Color(0xFFF97316);
   static const Color errorRed = Color(0xFFEF4444);
@@ -17,8 +17,8 @@ class AppTheme {
   static const Color donorGradientEnd = Color(0xFF1D4ED8);
 
   static const Color beneficiaryPrimary = primaryPurple;
-  static const Color beneficiaryGradientStart = Color(0xFF9333EA);
-  static const Color beneficiaryGradientEnd = Color(0xFF7C3AED);
+  static const Color beneficiaryGradientStart = Color(0xFFA78BFA);
+  static const Color beneficiaryGradientEnd = Color(0xFF8B5CF6);
 
   static ThemeData get lightTheme {
     return ThemeData(
