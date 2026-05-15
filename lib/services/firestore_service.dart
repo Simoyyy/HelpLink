@@ -67,8 +67,12 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// Stream all available help requests for donors (pending only)
-  Stream<List<HelpRequest>> getAvailableRequests({RequestCategory? category}) {
+  /// Stream all available help requests for donors (pending only).
+  /// Requests submitted by [excludeUserId] are filtered out client-side.
+  Stream<List<HelpRequest>> getAvailableRequests({
+    RequestCategory? category,
+    String? excludeUserId,
+  }) {
     Query query = _firestore
         .collection(AppConstants.helpRequestsCollection)
         .where('status', isEqualTo: RequestStatus.pending.name)
@@ -82,8 +86,13 @@ class FirestoreService {
           .orderBy('createdAt', descending: true);
     }
 
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
+    return query.snapshots().map((snapshot) {
+      final requests = snapshot.docs
+          .map((doc) => HelpRequest.fromFirestore(doc))
+          .toList();
+      if (excludeUserId == null) return requests;
+      return requests.where((r) => r.beneficiaryId != excludeUserId).toList();
+    });
   }
 
   /// Stream donor's active assistance
@@ -129,8 +138,12 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// One-time fetch of available (pending) requests for AI matching
-  Future<List<HelpRequest>> getAvailableRequestsOnce({int limit = 20}) async {
+  /// One-time fetch of available (pending) requests for AI matching.
+  /// Requests submitted by [excludeUserId] are filtered out.
+  Future<List<HelpRequest>> getAvailableRequestsOnce({
+    int limit = 20,
+    String? excludeUserId,
+  }) async {
     try {
       final snapshot = await _firestore
           .collection(AppConstants.helpRequestsCollection)
@@ -138,9 +151,11 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
-      return snapshot.docs
+      final all = snapshot.docs
           .map((doc) => HelpRequest.fromFirestore(doc))
           .toList();
+      if (excludeUserId == null) return all;
+      return all.where((r) => r.beneficiaryId != excludeUserId).toList();
     } catch (e) {
       return [];
     }
@@ -363,11 +378,40 @@ class FirestoreService {
         .collection(AppConstants.helpRequestsCollection)
         .doc(requestId)
         .collection(AppConstants.messagesCollection)
-        .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ChatMessage.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+      final messages = snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+      messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return messages;
+    });
+  }
+
+  /// Stream help requests where a beneficiary has an active conversation
+  Stream<List<HelpRequest>> getBeneficiaryConversations(String beneficiaryId) {
+    return _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .where('beneficiaryId', isEqualTo: beneficiaryId)
+        .where('status', whereIn: [
+          RequestStatus.matched.name,
+          RequestStatus.active.name,
+          RequestStatus.completed.name,
+        ])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
+  }
+
+  /// Stream announcements ordered by newest first
+  Stream<List<Map<String, dynamic>>> getAnnouncements() {
+    return _firestore
+        .collection(AppConstants.announcementsCollection)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   // ══════════════════════════════════════════════
@@ -432,15 +476,22 @@ class FirestoreService {
           .ref()
           .child('profile_images')
           .child('$userId.jpg');
-      await ref.putFile(imageFile);
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      await ref.putFile(imageFile, metadata);
       final url = await ref.getDownloadURL();
       await _firestore
           .collection(AppConstants.usersCollection)
           .doc(userId)
           .update({'profileImageUrl': url});
       return url;
+    } on FirebaseException catch (e) {
+      // ignore: avoid_print
+      print('[Storage] upload failed — code: ${e.code}, message: ${e.message}');
+      rethrow;
     } catch (e) {
-      return null;
+      // ignore: avoid_print
+      print('[Storage] upload failed — $e');
+      rethrow;
     }
   }
 
@@ -496,6 +547,15 @@ class FirestoreService {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Stream a single help request document for real-time status updates
+  Stream<HelpRequest?> getRequestStream(String requestId) {
+    return _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .snapshots()
+        .map((doc) => doc.exists ? HelpRequest.fromFirestore(doc) : null);
   }
 
   // ── Helpers ──

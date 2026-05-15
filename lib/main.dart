@@ -16,6 +16,7 @@ import 'package:helplink/screens/donor/donor_profile_screen.dart';
 import 'package:helplink/screens/donor/donor_history_screen.dart';
 import 'package:helplink/screens/donor/donor_ongoing_screen.dart';
 import 'package:helplink/screens/donor/set_location_screen.dart';
+import 'package:helplink/screens/ic_verification_screen.dart';
 import 'package:helplink/utils/theme.dart';
 
 void main() async {
@@ -56,6 +57,7 @@ class HelpLinkApp extends StatelessWidget {
           '/donor-history': (context) => const DonorHistoryScreen(),
           '/donor-ongoing': (context) => const DonorOngoingScreen(),
           '/donor-set-location': (context) => const SetLocationScreen(),
+          '/ic-verification': (context) => const ICVerificationScreen(),
         },
         onGenerateRoute: (settings) => null,
       ),

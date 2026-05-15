@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -24,7 +25,7 @@ class BeneficiaryHistoryScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       body: user == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120))
           : _HistoryContent(userId: user.uid, userName: user.fullName),
     );
   }
@@ -119,23 +120,27 @@ class _HistoryContentState extends State<_HistoryContent> {
                 child: const Icon(Icons.arrow_back,
                     color: Colors.white, size: 24),
               ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Request History',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  Text(
-                    'View all your help requests',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
-                  ),
-                ],
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Request History',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    Text(
+                      'View all your help requests',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 24),
             ],
           ),
         ),
@@ -223,15 +228,24 @@ class _HistoryContentState extends State<_HistoryContent> {
             stream: fs.getBeneficiaryRequests(widget.userId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
               }
 
               final filtered = _applyFilters(snapshot.data ?? []);
 
               if (filtered.isEmpty) {
-                return const Center(
-                  child: Text('No requests found.',
-                      style: TextStyle(color: AppTheme.textMuted)),
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Lottie.asset('assets/lottie/empty_requests.json',
+                          width: 160, height: 160, repeat: true),
+                      const SizedBox(height: 8),
+                      const Text('No requests found.',
+                          style: TextStyle(
+                              fontSize: 14, color: AppTheme.textMuted)),
+                    ],
+                  ),
                 );
               }
 

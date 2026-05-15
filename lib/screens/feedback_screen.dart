@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/services/firestore_service.dart';
@@ -130,6 +131,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           const SizedBox(height: 12),
           const Text(
             'Feedback',
+            textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
           ),
@@ -380,11 +382,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       child: ElevatedButton.icon(
         onPressed: canSubmit ? _submit : null,
         icon: _isSubmitting
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+            ? SizedBox(
+                width: 24,
+                height: 24,
+                child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain))
             : const Icon(Icons.thumb_up_outlined, size: 20),
         label: Text(
           _isSubmitting ? 'Submitting...' : 'Submit Feedback',

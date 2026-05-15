@@ -1,7 +1,11 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
@@ -25,6 +29,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
   bool _isSaving = false;
   bool _showSuccess = false;
   bool _isUploadingPhoto = false;
+  bool _hasPrecachedImage = false;
 
   @override
   void initState() {
@@ -34,6 +39,17 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
     _icController = TextEditingController(text: user?.icNumber ?? '');
     _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
     _locationController = TextEditingController(text: user?.location ?? '');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasPrecachedImage) {
+      _hasPrecachedImage = true;
+      precacheImage(
+          ResizeImage(const AssetImage('assets/images/6660.jpg'), width: 800),
+          context);
+    }
   }
 
   @override
@@ -50,7 +66,8 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
     setState(() => _isSaving = true);
 
     final authService = Provider.of<AuthService>(context, listen: false);
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final firestoreService =
+        Provider.of<FirestoreService>(context, listen: false);
     final user = authService.userModel;
     if (user == null) return;
 
@@ -87,7 +104,8 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
 
   Future<void> _pickAndUploadPhoto() async {
     final authService = Provider.of<AuthService>(context, listen: false);
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final firestoreService =
+        Provider.of<FirestoreService>(context, listen: false);
     final user = authService.userModel;
     if (user == null) return;
 
@@ -130,22 +148,57 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
 
     if (source == null) return;
 
-    final picked = await ImagePicker().pickImage(
-        source: source, maxWidth: 512, maxHeight: 512, imageQuality: 80);
+    XFile? picked;
+    if (source == ImageSource.camera) {
+      picked = await ImagePicker().pickImage(
+          source: ImageSource.camera, maxWidth: 512, maxHeight: 512, imageQuality: 80);
+    } else {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+      if (result != null && result.files.single.path != null) {
+        picked = XFile(result.files.single.path!);
+      }
+    }
     if (picked == null) return;
 
     setState(() => _isUploadingPhoto = true);
+    final oldPhotoUrl = user.profileImageUrl;
 
-    final url = await firestoreService.uploadProfileImage(
-        userId: user.uid, imageFile: File(picked.path));
-
-    await authService.loadUserData();
-
-    if (mounted) {
-      setState(() => _isUploadingPhoto = false);
-      if (url == null) {
+    try {
+      await firestoreService.uploadProfileImage(
+          userId: user.uid, imageFile: File(picked.path));
+      // Evict the old cached image so CachedNetworkImage fetches fresh content.
+      // Firebase Storage reuses the same download token for the same path, so
+      // without eviction the widget would keep showing the stale cached photo.
+      if (oldPhotoUrl != null) {
+        await CachedNetworkImage.evictFromCache(oldPhotoUrl);
+      }
+      await authService.loadUserData();
+      final newUrl = authService.userModel?.profileImageUrl;
+      if (newUrl != null && mounted) {
+        await precacheImage(CachedNetworkImageProvider(newUrl), context);
+      }
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Failed to upload photo. Please try again.'),
+            content: Text('Profile photo updated!'),
+            backgroundColor: AppTheme.successGreen));
+      }
+    } on FirebaseException catch (e) {
+      await authService.loadUserData();
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        final msg = e.code == 'unauthorized'
+            ? 'Permission denied. Storage rules may not be deployed yet.'
+            : 'Upload failed: ${e.message ?? e.code}';
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppTheme.errorRed));
+      }
+    } catch (e) {
+      await authService.loadUserData();
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Upload failed: $e'),
             backgroundColor: AppTheme.errorRed));
       }
     }
@@ -183,8 +236,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                 controller: newPwController,
                 label: 'New Password',
                 obscure: obscureNew,
-                onToggle: () =>
-                    setDialogState(() => obscureNew = !obscureNew),
+                onToggle: () => setDialogState(() => obscureNew = !obscureNew),
               ),
               const SizedBox(height: 12),
               _pwField(
@@ -237,8 +289,8 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                   ));
                 }
               },
-              child: const Text('Update',
-                  style: TextStyle(color: Colors.white)),
+              child:
+                  const Text('Update', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -258,8 +310,8 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
       decoration: InputDecoration(
         labelText: label,
         suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility,
-              size: 20),
+          icon:
+              Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 20),
           onPressed: onToggle,
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -276,7 +328,10 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
     final topPad = MediaQuery.of(context).padding.top;
 
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+          body: Center(
+              child: Lottie.asset('assets/lottie/loading.json',
+                  width: 120, height: 120)));
     }
 
     final initials = user.fullName.isNotEmpty
@@ -291,8 +346,14 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
           // ── Blue gradient header ──────────────────────────────────────
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: ResizeImage(
+                    const AssetImage('assets/images/6660.jpg'), width: 800),
+                fit: BoxFit.cover,
+                opacity: 0.7,
+              ),
+              gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
@@ -312,7 +373,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: const Icon(Icons.arrow_back,
-                            color: Colors.white, size: 24),
+                            color: Colors.black, size: 24),
                       ),
                       GestureDetector(
                         onTap: _isSaving
@@ -331,17 +392,18 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: Colors.black.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.5)),
+                                color: Colors.black.withValues(alpha: 0.5)),
                           ),
                           child: _isSaving
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
+                              ? SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Lottie.asset(
+                                      'assets/lottie/loading.json',
+                                      fit: BoxFit.contain))
                               : Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -380,28 +442,40 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.25),
                           border: Border.all(color: Colors.white, width: 3),
-                          image: user.profileImageUrl != null
-                              ? DecorationImage(
-                                  image:
-                                      NetworkImage(user.profileImageUrl!),
-                                  fit: BoxFit.cover)
-                              : null,
                         ),
-                        child: _isUploadingPhoto
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : user.profileImageUrl == null
-                                ? Center(
-                                    child: Text(
-                                      initials.toUpperCase(),
-                                      style: const TextStyle(
-                                          fontSize: 30,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white),
-                                    ),
-                                  )
-                                : null,
+                        child: ClipOval(
+                          child: _isUploadingPhoto
+                              ? Center(
+                                  child: Lottie.asset(
+                                      'assets/lottie/loading.json',
+                                      width: 40,
+                                      height: 40))
+                              : user.profileImageUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: user.profileImageUrl!,
+                                      fit: BoxFit.cover,
+                                      width: 88,
+                                      height: 88,
+                                      placeholder: (_, __) => Center(
+                                          child: Text(initials.toUpperCase(),
+                                              style: const TextStyle(
+                                                  fontSize: 30,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white))),
+                                      errorWidget: (_, __, ___) => Center(
+                                          child: Text(initials.toUpperCase(),
+                                              style: const TextStyle(
+                                                  fontSize: 30,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white))),
+                                    )
+                                  : Center(
+                                      child: Text(initials.toUpperCase(),
+                                          style: const TextStyle(
+                                              fontSize: 30,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white))),
+                        ),
                       ),
                       Positioned(
                         bottom: 0,
@@ -422,19 +496,25 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  user.fullName,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    user.fullName,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: AppTheme.primaryBlue,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
@@ -466,12 +546,11 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color:
-                              AppTheme.successGreen.withValues(alpha: 0.1),
+                          color: AppTheme.successGreen.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: AppTheme.successGreen
-                                  .withValues(alpha: 0.4)),
+                              color:
+                                  AppTheme.successGreen.withValues(alpha: 0.4)),
                         ),
                         child: Row(
                           children: [
@@ -488,8 +567,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                               ),
                             ),
                             GestureDetector(
-                              onTap: () =>
-                                  setState(() => _showSuccess = false),
+                              onTap: () => setState(() => _showSuccess = false),
                               child: const Icon(Icons.close,
                                   size: 16, color: AppTheme.successGreen),
                             ),
@@ -531,6 +609,65 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? 'Required'
                                 : null,
+                          ),
+                          _divider(),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('IC Verification',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textMuted)),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    _fieldIcon(
+                                        Icons.verified_user_rounded,
+                                        user.isICVerified == true
+                                            ? AppTheme.successGreen
+                                            : AppTheme.textMuted),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                user.isICVerified == true
+                                                    ? 'Verified ✓'
+                                                    : 'Not verified',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: user.isICVerified ==
+                                                          true
+                                                      ? AppTheme.successGreen
+                                                      : AppTheme.warningOrange,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (user.isICVerified != true)
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pushNamed(context,
+                                                      '/ic-verification'),
+                                              child: const Text('Verify Now'),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                           _divider(),
                           _profileField(
@@ -581,11 +718,12 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                                 borderRadius: BorderRadius.circular(12)),
                           ),
                           child: _isSaving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
+                              ? SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Lottie.asset(
+                                      'assets/lottie/loading.json',
+                                      fit: BoxFit.contain))
                               : const Text('Save Changes',
                                   style: TextStyle(
                                       fontSize: 15,
@@ -607,17 +745,15 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Row(
                           children: [
                             Container(
-                              width: 40,
-                              height: 40,
+                              width: 42,
+                              height: 42,
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryBlue
-                                    .withValues(alpha: 0.1),
+                                color: AppTheme.primaryBlue.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(Icons.lock_outline,
@@ -657,8 +793,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Column(
                         children: [
@@ -688,6 +823,18 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
             color: AppTheme.textDark),
       );
 
+  Widget _fieldIcon(IconData icon, Color color) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+
   Widget _divider() => const Divider(
       height: 1, thickness: 1, color: Color(0xFFE2E8F0), indent: 16);
 
@@ -712,9 +859,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(icon,
-                  size: 18,
-                  color: enabled ? accentColor : AppTheme.textMuted),
+              _fieldIcon(icon, enabled ? accentColor : AppTheme.textMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: controller != null
@@ -757,8 +902,7 @@ class _DonorProfileScreenState extends State<DonorProfileScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style:
-                const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+            style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
         Text(value,
             style: const TextStyle(
                 fontSize: 13,

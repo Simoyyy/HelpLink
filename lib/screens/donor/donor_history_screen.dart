@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -18,7 +19,7 @@ class DonorHistoryScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       body: user == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120))
           : _HistoryContent(userId: user.uid),
     );
   }
@@ -53,7 +54,7 @@ class _HistoryContentState extends State<_HistoryContent> {
       stream: firestoreService.getDonorAllAssistance(widget.userId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
         }
 
         final allRequests = snapshot.data ?? [];
@@ -104,14 +105,18 @@ class _HistoryContentState extends State<_HistoryContent> {
                           icon: const Icon(Icons.arrow_back,
                               color: Colors.white),
                         ),
-                        const Text(
-                          'Assistance History',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        const Expanded(
+                          child: Text(
+                            'Assistance History',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 48),
                       ],
                     ),
                   ),
@@ -204,13 +209,19 @@ class _HistoryContentState extends State<_HistoryContent> {
 
                     // Request cards
                     if (filteredRequests.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Center(
-                          child: Text(
-                            'No assistance history yet.',
-                            style: TextStyle(
-                                color: AppTheme.textMuted, fontSize: 14),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Lottie.asset('assets/lottie/empty_requests.json',
+                                  width: 160, height: 160, repeat: true),
+                              const SizedBox(height: 8),
+                              const Text('No assistance history yet.',
+                                  style: TextStyle(
+                                      color: AppTheme.textMuted, fontSize: 14)),
+                            ],
                           ),
                         ),
                       )

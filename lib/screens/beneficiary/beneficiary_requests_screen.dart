@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -30,7 +31,7 @@ class _BeneficiaryRequestsScreenState
     final topPad = MediaQuery.of(context).padding.top;
 
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120)));
     }
 
     final firestoreService = Provider.of<FirestoreService>(context);
@@ -60,14 +61,17 @@ class _BeneficiaryRequestsScreenState
                   child: const Icon(Icons.arrow_back,
                       color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Ongoing Requests',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                const Expanded(
+                  child: Text(
+                    'Ongoing Requests',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
+                  ),
                 ),
+                const SizedBox(width: 24),
               ],
             ),
           ),
@@ -78,7 +82,7 @@ class _BeneficiaryRequestsScreenState
               stream: firestoreService.getBeneficiaryRequests(user.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return Center(child: Lottie.asset('assets/lottie/loading.json', width: 120, height: 120));
                 }
 
                 final all = snapshot.data ?? [];
@@ -171,10 +175,22 @@ class _BeneficiaryRequestsScreenState
                     // List
                     Expanded(
                       child: filtered.isEmpty
-                          ? const Center(
-                              child: Text('No requests found.',
-                                  style:
-                                      TextStyle(color: AppTheme.textMuted)),
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Lottie.asset(
+                                      'assets/lottie/empty_requests.json',
+                                      width: 160,
+                                      height: 160,
+                                      repeat: true),
+                                  const SizedBox(height: 8),
+                                  const Text('No requests found.',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppTheme.textMuted)),
+                                ],
+                              ),
                             )
                           : ListView.builder(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

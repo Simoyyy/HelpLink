@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/utils/theme.dart';
+import 'package:helplink/widgets/otp_input_box.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({super.key});
@@ -12,18 +14,18 @@ class EmailVerificationScreen extends StatefulWidget {
 }
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+  final _otpKey = GlobalKey<OtpInputBoxState>();
+  String _code = '';
 
-  Future<void> _verifyEmail() async {
+  Future<void> _verify() async {
+    if (_code.length < 6) return;
     final authService = context.read<AuthService>();
-    final success = await authService.verifyEmail();
-
+    final success = await authService.verifyEmailOTP(_code);
     if (!mounted) return;
-
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-              'Registration successful! Please log in with your credentials.'),
+          content: const Text('Email verified! Please log in.'),
           backgroundColor: HelpLinkTheme.success,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -32,41 +34,40 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       );
       Navigator.pushReplacementNamed(context, '/login');
     } else {
-      _showError(authService.errorMessage ?? 'Verification failed');
-    }
-  }
-
-  Future<void> _resendCode() async {
-    final authService = context.read<AuthService>();
-    final success = await authService.resendVerificationEmail();
-
-    if (!mounted) return;
-
-    if (success) {
+      _otpKey.currentState?.clear();
+      setState(() => _code = '');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Verification code resent!'),
-          backgroundColor: HelpLinkTheme.success,
+          content: Text(authService.errorMessage ?? 'Incorrect code. Please try again.'),
+          backgroundColor: HelpLinkTheme.error,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-    } else {
-      _showError(authService.errorMessage ?? 'Failed to resend code');
     }
   }
 
-  void _showError(String message) {
+  Future<void> _resend() async {
+    final authService = context.read<AuthService>();
+    final success = await authService.resendVerificationEmail();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: HelpLinkTheme.error,
+        content: Text(success
+            ? 'New code sent!'
+            : (authService.errorMessage ?? 'Failed to resend')),
+        backgroundColor:
+            success ? HelpLinkTheme.success : HelpLinkTheme.error,
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+    if (success) {
+      _otpKey.currentState?.clear();
+      setState(() => _code = '');
+    }
   }
 
   @override
@@ -77,7 +78,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Purple gradient header
+          // Gradient header
           Container(
             width: double.infinity,
             padding: EdgeInsets.only(
@@ -110,15 +111,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 const Text(
                   'Verify Your Email',
                   style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  "We've sent a verification link to your email. Please click the link, then return to this screen.",
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
+                Text(
+                  'Enter the 6-digit code sent to $email',
+                  style:
+                      const TextStyle(fontSize: 14, color: Colors.white70),
                 ),
               ],
             ),
@@ -129,104 +130,108 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 36),
 
-                  // Email card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: HelpLinkTheme.beneficiaryPrimary.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color:
-                            HelpLinkTheme.beneficiaryPrimary.withOpacity(0.15),
-                      ),
-                    ),
+                  // Email icon + label
+                  Center(
                     child: Column(
                       children: [
                         Container(
-                          width: 64,
-                          height: 64,
+                          width: 72,
+                          height: 72,
                           decoration: BoxDecoration(
-                            color: HelpLinkTheme.beneficiaryPrimary,
-                            borderRadius: BorderRadius.circular(32),
+                            color: HelpLinkTheme.beneficiaryPrimary
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(36),
                           ),
-                          child: const Icon(Icons.mail_outline,
-                              color: Colors.white, size: 32),
+                          child: const Icon(
+                            Icons.mark_email_unread_outlined,
+                            size: 36,
+                            color: HelpLinkTheme.beneficiaryPrimary,
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Check your email',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
+                        const SizedBox(height: 12),
+                        const Text('Check your inbox',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
-                        Text(
-                          email,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              color: HelpLinkTheme.textSecondary),
-                        ),
+                        Text(email,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: HelpLinkTheme.textSecondary)),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 36),
 
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Please check your inbox (and spam folder) for a verification email. After clicking the link, tap the button below.',
-                    style: TextStyle(
-                        fontSize: 13, color: HelpLinkTheme.textSecondary),
-                    textAlign: TextAlign.center,
+                  const Text('Verification Code',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 12),
+
+                  OtpInputBox(
+                    key: _otpKey,
+                    activeColor: HelpLinkTheme.beneficiaryPrimary,
+                    onChanged: (v) => setState(() => _code = v),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: authService.isLoading ? null : _resend,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Resend Code'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: HelpLinkTheme.beneficiaryPrimary,
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
 
-                  // Verify button
+                  const SizedBox(height: 28),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: authService.isLoading ? null : _verifyEmail,
+                      onPressed:
+                          (_code.length == 6 && !authService.isLoading)
+                              ? _verify
+                              : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: HelpLinkTheme.beneficiaryPrimary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        disabledBackgroundColor:
+                            HelpLinkTheme.beneficiaryPrimary
+                                .withValues(alpha: 0.4),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
                       child: authService.isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Text('I have verified my email',
+                          ? SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: Lottie.asset(
+                                  'assets/lottie/loading.json',
+                                  fit: BoxFit.contain))
+                          : const Text('Verify Email',
                               style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w600)),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600)),
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 32),
 
-                  // Resend
-                  const Text("Didn't receive the email?",
-                      style: TextStyle(
-                          fontSize: 13, color: HelpLinkTheme.textSecondary)),
-                  TextButton.icon(
-                    onPressed: authService.isLoading ? null : _resendCode,
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Resend verification email'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: HelpLinkTheme.beneficiaryPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Info box
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -238,14 +243,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Why verify?',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
+                        Text('Why verify?',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600)),
                         SizedBox(height: 4),
                         Text(
-                          'Email verification helps us confirm your identity and keep your account secure.',
+                          'Email verification confirms your identity and keeps your account secure.',
                           style: TextStyle(
                               fontSize: 13,
                               color: HelpLinkTheme.textSecondary),

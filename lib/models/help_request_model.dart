@@ -57,7 +57,7 @@ class HelpRequest {
       description: data['description'] ?? '',
       category: _parseCategory(data['category'] as String? ?? 'other'),
       status: _parseStatus(data['status'] as String? ?? 'pending'),
-      isAnonymous: data['isAnonymous'] ?? false,
+      isAnonymous: data['isAnonymous'] == true,
       location: data['location'],
       latitude: data['latitude']?.toDouble(),
       longitude: data['longitude']?.toDouble(),
@@ -66,9 +66,9 @@ class HelpRequest {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       matchedAt: (data['matchedAt'] as Timestamp?)?.toDate(),
       completedAt: (data['completedAt'] as Timestamp?)?.toDate(),
-      isEmergency: data['isEmergency'] ?? false,
-      donorFeedbackGiven: data['donorFeedbackGiven'] ?? false,
-      beneficiaryFeedbackGiven: data['beneficiaryFeedbackGiven'] ?? false,
+      isEmergency: data['isEmergency'] == true,
+      donorFeedbackGiven: data['donorFeedbackGiven'] == true,
+      beneficiaryFeedbackGiven: data['beneficiaryFeedbackGiven'] == true,
     );
   }
 

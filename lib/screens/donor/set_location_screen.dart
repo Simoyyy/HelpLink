@@ -1,4 +1,6 @@
+import 'dart:math' show cos, pi;
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart' hide Marker;
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -20,11 +22,13 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   final _searchController = TextEditingController();
   GoogleMapController? _mapController;
 
+  static const LatLng _defaultCenter = LatLng(1.4582, 110.4387);
+
   double _radiusKm = 2.5;
   double? _currentLat;
   double? _currentLng;
   String _locationText = '';
-  bool _isLoadingLocation = true;
+  bool _isLoadingLocation = false;
   List<_NearbyRequest> _nearbyRequests = [];
 
   Set<Marker> _markers = {};
@@ -120,11 +124,16 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
       _circles = circles;
     });
 
-    // Pan camera to user location
+    // Fit camera so the full radius circle is always visible
+    final latDelta = _radiusKm / 111.0;
+    final lngDelta = _radiusKm / (111.0 * cos(_currentLat! * pi / 180));
     _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(
-        center,
-        _radiusKm <= 2 ? 14.5 : _radiusKm <= 10 ? 13 : 11,
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(_currentLat! - latDelta, _currentLng! - lngDelta),
+          northeast: LatLng(_currentLat! + latDelta, _currentLng! + lngDelta),
+        ),
+        48,
       ),
     );
   }
@@ -132,54 +141,56 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   // ── Location loading ──────────────────────────────────────────────────────
 
   Future<void> _loadCurrentLocation() async {
-    setState(() => _isLoadingLocation = true);
-
+    // Show cached position instantly so the map renders right away
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _useStoredLocation();
-        return;
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() {
+          _currentLat = last.latitude;
+          _currentLng = last.longitude;
+        });
+        _updateMap();
+        _filterNearbyRequests();
       }
+    } catch (_) {}
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _useStoredLocation();
-          return;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _useStoredLocation();
-        return;
-      }
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) { _useStoredLocation(); return; }
 
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) { _useStoredLocation(); return; }
+    }
+    if (permission == LocationPermission.deniedForever) { _useStoredLocation(); return; }
+
+    if (mounted) setState(() => _isLoadingLocation = true);
+    try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
+            const LocationSettings(accuracy: LocationAccuracy.medium),
       );
-
       _currentLat = position.latitude;
       _currentLng = position.longitude;
 
-      try {
-        final placemarks =
-            await placemarkFromCoordinates(_currentLat!, _currentLng!);
-        if (placemarks.isNotEmpty) {
-          final p = placemarks.first;
-          _locationText =
-              '${p.name ?? ''}, ${p.locality ?? ''}, ${p.administrativeArea ?? ''}'
-                  .replaceAll(RegExp(r'^, |, $'), '');
-          _searchController.text = _locationText;
-        }
-      } catch (_) {}
-
-      await _filterNearbyRequests();
+      // Geocode and filter in parallel
+      await Future.wait([
+        placemarkFromCoordinates(_currentLat!, _currentLng!).then((marks) {
+          if (marks.isNotEmpty && mounted) {
+            final p = marks.first;
+            _locationText =
+                '${p.name ?? ''}, ${p.locality ?? ''}, ${p.administrativeArea ?? ''}'
+                    .replaceAll(RegExp(r'^, |, $'), '');
+            _searchController.text = _locationText;
+          }
+        }).catchError((_) {}),
+        _filterNearbyRequests(),
+      ]);
     } catch (_) {
       _useStoredLocation();
+    } finally {
+      if (mounted) setState(() => _isLoadingLocation = false);
     }
-
-    if (mounted) setState(() => _isLoadingLocation = false);
   }
 
   void _useStoredLocation() {
@@ -221,7 +232,8 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
     if (_currentLat == null || _currentLng == null) return;
 
     final fs = Provider.of<FirestoreService>(context, listen: false);
-    final requests = await fs.getAvailableRequests().first;
+    final uid = Provider.of<AuthService>(context, listen: false).userModel?.uid;
+    final requests = await fs.getAvailableRequests(excludeUserId: uid).first;
     final nearby = <_NearbyRequest>[];
 
     for (final r in requests) {
@@ -324,30 +336,64 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
                   SizedBox(
                     width: double.infinity,
                     height: 240,
-                    child: _isLoadingLocation
-                        ? const Center(child: CircularProgressIndicator())
-                        : _currentLat == null
-                            ? const Center(
-                                child: Text('Enable location to see map',
-                                    style: TextStyle(
-                                        color: AppTheme.textMuted)),
-                              )
-                            : GoogleMap(
-                                initialCameraPosition: CameraPosition(
-                                  target: LatLng(_currentLat!, _currentLng!),
-                                  zoom: 14,
-                                ),
-                                onMapCreated: (controller) {
-                                  _mapController = controller;
-                                  _updateMap();
-                                },
-                                markers: _markers,
-                                circles: _circles,
-                                myLocationEnabled: true,
-                                myLocationButtonEnabled: false,
-                                zoomControlsEnabled: true,
-                                mapToolbarEnabled: false,
+                    child: Stack(
+                      children: [
+                        GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: _currentLat != null
+                                ? LatLng(_currentLat!, _currentLng!)
+                                : _defaultCenter,
+                            zoom: 14,
+                          ),
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                            if (_currentLat != null) _updateMap();
+                          },
+                          markers: _markers,
+                          circles: _circles,
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: true,
+                          mapToolbarEnabled: false,
+                          liteModeEnabled: false,
+                        ),
+                        if (_isLoadingLocation)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 6),
+                                ],
                               ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Lottie.asset('assets/lottie/loading.json',
+                                      width: 18, height: 18, fit: BoxFit.contain),
+                                  const SizedBox(width: 6),
+                                  const Text('Locating…',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppTheme.textDark)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_currentLat == null && !_isLoadingLocation)
+                          const Center(
+                            child: Text('Enable location to see map',
+                                style: TextStyle(color: AppTheme.textMuted)),
+                          ),
+                      ],
+                    ),
                   ),
 
                   // ── Category legend ──
@@ -399,7 +445,10 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
                             min: 0.5,
                             max: 100,
                             value: _radiusKm,
-                            onChanged: (v) => setState(() => _radiusKm = v),
+                            onChanged: (v) {
+                              setState(() => _radiusKm = v);
+                              _updateMap();
+                            },
                             onChangeEnd: (_) => _filterNearbyRequests(),
                           ),
                         ),

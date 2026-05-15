@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/utils/app_theme.dart';
 
@@ -69,12 +72,16 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   // ── Layout ──────────────────────────────────────────────────────────────
   static const double _w = 310;
   static const double _headerH = 54.0;
-  static const double _bodyH = 360.0;
+  static const double _bodyH = 308.0;
+  static const double _suggestH = 52.0;
   static const double _inputH = 58.0;
-  static const double _expandedH = _headerH + _bodyH + _inputH;
+  static const double _expandedH = _headerH + _bodyH + _suggestH + _inputH;
 
-  // ── Gemini ──────────────────────────────────────────────────────────────
-  static const String _apiKey = 'AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8';
+  // ── Groq ─────────────────────────────────────────────────────────────────
+  static const String _groqApiKey = String.fromEnvironment('GROQ_API_KEY');
+  static const String _groqModel = 'llama-3.1-8b-instant';
+  static const String _groqUrl =
+      'https://api.groq.com/openai/v1/chat/completions';
 
   // ── Position ────────────────────────────────────────────────────────────
   Offset _pos = Offset.zero;
@@ -89,10 +96,8 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<_Msg> _msgs = [];
-  GenerativeModel? _model;
-  final List<Content> _history = [];
+  final List<Map<String, dynamic>> _messages = [];
   bool _thinking = false;
-  bool _showQuickReplies = true;
   late final AnimationController _dotCtrl;
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -144,20 +149,11 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   void _initChat() {
     final firstName = widget.user.fullName.split(' ').first;
 
-    _model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: _apiKey);
+    final systemPrompt = _isDonor
+        ? 'You are HelpBot, a friendly AI assistant in HelpLink — a humanitarian aid app connecting donors with people in need. The user is a donor named ${widget.user.fullName}. Help with: choosing requests, statuses (pending/matched/active/completed), contacting beneficiaries, feedback ratings, and AI smart matching. Keep responses concise (2-3 sentences) and warm.'
+        : 'You are HelpBot, a friendly AI assistant in HelpLink — a humanitarian aid app connecting donors with people in need. The user is a beneficiary named ${widget.user.fullName}. Help with: writing good requests, categories (Food/Medical/Education/Transportation/Housing/Other), understanding statuses, messaging donors (only after matching), and the 5 requests/week limit. Keep responses concise (2-3 sentences), warm, and encouraging.';
 
-    // Seed history with role context as a user→model exchange.
-    // This avoids systemInstruction which is not supported by all models/versions.
-    final contextMsg = _isDonor
-        ? 'You are HelpBot, a friendly AI assistant in HelpLink — a humanitarian aid app connecting donors with people in need. I am a donor named ${widget.user.fullName}. Help me with: choosing requests, statuses (pending/matched/active/completed), contacting beneficiaries, feedback ratings, and how AI smart matching works. Keep responses concise (2-3 sentences) and warm.'
-        : 'You are HelpBot, a friendly AI assistant in HelpLink — a humanitarian aid app connecting donors with people in need. I am a beneficiary named ${widget.user.fullName}. Help me with: writing good requests, choosing categories (Food/Medical/Education/Transportation/Housing/Other), understanding statuses, messaging donors (only after matching), and the 5 requests/week limit. Keep responses concise (2-3 sentences), warm, and encouraging.';
-
-    _history.addAll([
-      Content.text(contextMsg),
-      Content.model([
-        TextPart('Understood! I am HelpBot, your HelpLink assistant. I am ready to help you. What would you like to know?'),
-      ]),
-    ]);
+    _messages.add({'role': 'system', 'content': systemPrompt});
 
     final greeting = _isDonor
         ? 'Hi $firstName! 👋 I\'m HelpBot.\nAsk me anything about finding requests, matching, or how the app works!'
@@ -170,38 +166,27 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
 
   Future<void> _send(String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || _thinking || _model == null) return;
+    if (trimmed.isEmpty || _thinking) return;
 
     _inputCtrl.clear();
-    _history.add(Content.text(trimmed));
+    _messages.add({'role': 'user', 'content': trimmed});
 
     setState(() {
-      _showQuickReplies = false;
       _msgs.add(_Msg(isUser: true, text: trimmed));
       _thinking = true;
       _msgs.add(const _Msg(isUser: false, text: '', isStreaming: true));
     });
     _scrollToBottom();
 
-    final buffer = StringBuffer();
     try {
-      final stream = _model!.generateContentStream(_history);
-      await for (final chunk in stream) {
-        buffer.write(chunk.text ?? '');
+      final success = await _streamGroqResponse();
+
+      if (!success) {
+        final local = _localResponse(trimmed);
+        _messages.add({'role': 'assistant', 'content': local});
         if (mounted) {
-          setState(() {
-            _msgs.last = _msgs.last.copyWith(text: buffer.toString());
-          });
-          _scrollToBottom();
+          setState(() => _msgs.last = _msgs.last.copyWith(text: local));
         }
-      }
-      _history.add(Content.model([TextPart(buffer.toString())]));
-    } catch (e) {
-      _history.removeLast(); // undo failed user turn
-      if (mounted) {
-        setState(() {
-          _msgs.last = _msgs.last.copyWith(text: 'Error: $e');
-        });
       }
     } finally {
       if (mounted) {
@@ -210,6 +195,170 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
           _thinking = false;
         });
       }
+    }
+  }
+
+  // Streams a response from Groq into the last bubble.
+  // Returns true on success, false on any error.
+  Future<bool> _streamGroqResponse() async {
+    final buffer = StringBuffer();
+    try {
+      final request = http.Request('POST', Uri.parse(_groqUrl));
+      request.headers['Authorization'] = 'Bearer $_groqApiKey';
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({
+        'model': _groqModel,
+        'messages': _messages,
+        'stream': true,
+        'max_tokens': 350,
+      });
+
+      final streamed = await http.Client().send(request);
+      if (streamed.statusCode != 200) {
+        debugPrint('HelpBot Groq HTTP ${streamed.statusCode}');
+        return false;
+      }
+
+      await for (final line in streamed.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        if (!line.startsWith('data: ')) continue;
+        final data = line.substring(6).trim();
+        if (data == '[DONE]') break;
+        try {
+          final json = jsonDecode(data) as Map<String, dynamic>;
+          final content = json['choices']?[0]?['delta']?['content'] as String?;
+          if (content != null) {
+            buffer.write(content);
+            if (mounted) {
+              setState(() =>
+                  _msgs.last = _msgs.last.copyWith(text: buffer.toString()));
+              _scrollToBottom();
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (buffer.isEmpty) return false;
+      _messages.add({'role': 'assistant', 'content': buffer.toString()});
+      return true;
+    } catch (e) {
+      debugPrint('HelpBot Groq error: $e');
+      return false;
+    }
+  }
+
+  // ── Local fallback responses (used when all AI models are unavailable) ────
+
+  String _localResponse(String question) {
+    final q = question.toLowerCase();
+
+    if (_isDonor) {
+      if (q.contains('match') ||
+          q.contains('find') ||
+          q.contains('accept') ||
+          q.contains('request')) {
+        return 'Browse the Available Requests section on your dashboard. Each card shows the category, location, and beneficiary details. Tap "Accept Request" to be matched — the request moves to Matched status and you can start chatting with the beneficiary!';
+      }
+      if (q.contains('after') ||
+          q.contains('accepted') ||
+          q.contains('what to do') ||
+          q.contains('next')) {
+        return 'Once you accept a request, go to Ongoing Requests to find it. Use the Message button to coordinate with the beneficiary. When the help has been given, tap "Mark Complete" and then leave feedback so the beneficiary knows you care!';
+      }
+      if (q.contains('rating') ||
+          q.contains('feedback') ||
+          q.contains('review') ||
+          q.contains('star')) {
+        return 'After a request is marked Completed, both you and the beneficiary can leave feedback. Your rating builds your reputation in the community and helps HelpLink match you with more requests that suit you.';
+      }
+      if (q.contains('ai') ||
+          q.contains('smart') ||
+          q.contains('recommend') ||
+          q.contains('suggest')) {
+        return 'The AI Smart Matching on your dashboard recommends requests based on the category, location, and urgency that best fit your giving history. Tap "Refresh" to get fresh suggestions anytime!';
+      }
+      if (q.contains('message') ||
+          q.contains('chat') ||
+          q.contains('contact') ||
+          q.contains('talk')) {
+        return 'You can message a beneficiary once you have accepted their request. Go to Ongoing Requests, tap the request card, and hit the Message button. You can also open chats from the Notifications screen under Messages.';
+      }
+      if (q.contains('complete') ||
+          q.contains('finish') ||
+          q.contains('done') ||
+          q.contains('mark')) {
+        return 'When you have finished helping, open the request in Ongoing Requests and tap "Mark Complete". This moves the request to the Pending Feedback stage so both sides can leave a review.';
+      }
+      if (q.contains('cancel') ||
+          q.contains('withdraw') ||
+          q.contains('undo')) {
+        return 'If you need to withdraw from a request you already accepted, contact the beneficiary via chat first to let them know. Then reach out to HelpLink support so the request can be re-opened for another donor.';
+      }
+      return 'I\'m here to help! You can ask me about finding and accepting requests, what to do after accepting, how to message beneficiaries, how ratings work, or how the AI smart matching works.';
+    } else {
+      if (q.contains('better request') ||
+          q.contains('write') ||
+          q.contains('good request') ||
+          q.contains('create')) {
+        return 'Here are the keys to a great request:\n1. Write a clear, specific title (e.g. "Need groceries for 3 days")\n2. Describe exactly what you need and when\n3. Add your location so donors nearby can find you faster\n4. Pick the right category — Food, Medical, Education, Transportation, Housing, or Other.';
+      }
+      if (q.contains('status') ||
+          q.contains('label') ||
+          q.contains('pending') ||
+          q.contains('matched') ||
+          q.contains('active') ||
+          q.contains('completed')) {
+        return 'Here\'s what each status means:\n🕐 Pending — waiting for a donor to accept\n🤝 Matched — a donor accepted, coordinate via chat\n⚡ Active — help is actively in progress\n✅ Completed — help was given, please leave feedback!\n\nYou can track all this in Ongoing Requests.';
+      }
+      if (q.contains('message') ||
+          q.contains('chat') ||
+          q.contains('contact') ||
+          q.contains('donor') ||
+          q.contains('talk')) {
+        return 'The Message button appears on your request card once a donor is Matched or Active. You can also find all your conversations in the Notifications screen under the Messages tab. You cannot message before a match — this protects both sides.';
+      }
+      if (q.contains('limit') ||
+          q.contains('how many') ||
+          q.contains('week') ||
+          q.contains('5')) {
+        return 'You can submit up to 5 requests per week. The counter resets every Monday at midnight. To make the most of your limit, try combining multiple needs into one well-described request when possible!';
+      }
+      if (q.contains('anonymous') ||
+          q.contains('privacy') ||
+          q.contains('name') ||
+          q.contains('identity') ||
+          q.contains('hide')) {
+        return 'When creating a request, toggle "Submit anonymously" to hide your real name from donors. They will see "Anonymous" instead. Your identity is still securely verified by HelpLink behind the scenes for safety.';
+      }
+      if (q.contains('cancel') ||
+          q.contains('delete') ||
+          q.contains('remove') ||
+          q.contains('withdraw')) {
+        return 'You can cancel a Pending request from its Request Details screen. Once a donor is matched, the request cannot be cancelled on your own — please message the donor first, then contact HelpLink support if needed.';
+      }
+      if (q.contains('location') ||
+          q.contains('map') ||
+          q.contains('where') ||
+          q.contains('address')) {
+        return 'Adding your location helps donors nearby find your request faster. Tap the location field when creating a request and either type your area or use the map picker to pin your location accurately.';
+      }
+      if (q.contains('category') ||
+          q.contains('type') ||
+          q.contains('food') ||
+          q.contains('medical') ||
+          q.contains('education') ||
+          q.contains('transport') ||
+          q.contains('housing')) {
+        return 'Choose the category that best fits your need:\n🍽 Food — meals, groceries\n🏥 Medical — medicines, appointments\n📚 Education — books, fees, tutoring\n🚗 Transportation — rides, bus fare\n🏠 Housing — rent, shelter\n📦 Other — anything else\n\nPicking the right one helps match you faster!';
+      }
+      if (q.contains('feedback') ||
+          q.contains('rating') ||
+          q.contains('review') ||
+          q.contains('star')) {
+        return 'After your request is Completed, you\'ll see a "Provide Feedback" button. Please take a moment to rate your experience — it helps donors feel appreciated and motivates them to keep helping!';
+      }
+      return 'I\'m here to help! Ask me about writing a good request, understanding status labels, messaging your donor, the weekly request limit, staying anonymous, or anything else about using HelpLink.';
     }
   }
 
@@ -291,6 +440,7 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildMessageArea(),
+                        _buildQuickReplies(),
                         _buildInput(),
                       ],
                     ),
@@ -397,21 +547,14 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   // ── Message area ─────────────────────────────────────────────────────────
 
   Widget _buildMessageArea() {
-    final count =
-        _msgs.length + (_showQuickReplies && _msgs.length == 1 ? 1 : 0);
     return Container(
       height: _bodyH,
       color: const Color(0xFFF8FAFC),
       child: ListView.builder(
         controller: _scrollCtrl,
         padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-        itemCount: count,
-        itemBuilder: (_, i) {
-          if (_showQuickReplies && _msgs.length == 1 && i == 1) {
-            return _buildQuickReplies();
-          }
-          return _buildBubble(_msgs[i]);
-        },
+        itemCount: _msgs.length,
+        itemBuilder: (_, i) => _buildBubble(_msgs[i]),
       ),
     );
   }
@@ -493,35 +636,51 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   }
 
   Widget _buildQuickReplies() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: _quickReplies
-            .map((q) => GestureDetector(
-                  onTap: () => _send(q),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _accent.withValues(alpha: 0.4)),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 3),
-                      ],
-                    ),
-                    child: Text(q,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: _accent,
-                            fontWeight: FontWeight.w500)),
-                  ),
-                ))
-            .toList(),
+    return Container(
+      height: _suggestH,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        border: Border(
+          top: BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        itemCount: _quickReplies.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final q = _quickReplies[i];
+          return GestureDetector(
+            onTap: _thinking ? null : () => _send(q),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              opacity: _thinking ? 0.4 : 1.0,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _accent.withValues(alpha: 0.4)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 3),
+                  ],
+                ),
+                child: Text(
+                  q,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: _accent,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -579,13 +738,10 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                 shape: BoxShape.circle,
               ),
               child: _thinking
-                  ? const Center(
-                      child: SizedBox(
-                        width: 15,
-                        height: 15,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.grey),
-                      ),
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain),
                     )
                   : const Icon(Icons.send_rounded,
                       color: Colors.white, size: 15),

@@ -15,6 +15,8 @@ class UserModel {
   final double? longitude;
   final String? icNumber;
   final String? phoneNumber;
+  final bool isICVerified;
+  final DateTime? icVerifiedAt;
 
   UserModel({
     required this.uid,
@@ -29,6 +31,8 @@ class UserModel {
     this.longitude,
     this.icNumber,
     this.phoneNumber,
+    this.isICVerified = false,
+    this.icVerifiedAt,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -40,7 +44,7 @@ class UserModel {
       role: (data['role'] as String?) == 'donor'
           ? UserRole.donor
           : UserRole.beneficiary,
-      isEmailVerified: data['isEmailVerified'] ?? false,
+      isEmailVerified: data['isEmailVerified'] == true,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       profileImageUrl: data['profileImageUrl'],
       location: data['location'],
@@ -48,6 +52,8 @@ class UserModel {
       longitude: data['longitude']?.toDouble(),
       icNumber: data['icNumber'],
       phoneNumber: data['phoneNumber'],
+      isICVerified: data['isICVerified'] == true,
+      icVerifiedAt: (data['icVerifiedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -64,6 +70,9 @@ class UserModel {
       'longitude': longitude,
       'icNumber': icNumber,
       'phoneNumber': phoneNumber,
+      'isICVerified': isICVerified,
+      'icVerifiedAt':
+          icVerifiedAt != null ? Timestamp.fromDate(icVerifiedAt!) : null,
     };
   }
 
@@ -78,6 +87,8 @@ class UserModel {
     double? longitude,
     String? icNumber,
     String? phoneNumber,
+    bool? isICVerified,
+    DateTime? icVerifiedAt,
   }) {
     return UserModel(
       uid: uid,
@@ -92,6 +103,8 @@ class UserModel {
       longitude: longitude ?? this.longitude,
       icNumber: icNumber ?? this.icNumber,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      isICVerified: isICVerified ?? this.isICVerified,
+      icVerifiedAt: icVerifiedAt ?? this.icVerifiedAt,
     );
   }
 }
