@@ -3,7 +3,45 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "Bash(flutter pub:*)",
-      "Bash(curl -s \"https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8\")"
+      "Bash(curl -s \"https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyDTvOw7FDqDIieopikqmc7NyTNuXThIbc8\")",
+      "Bash(firebase deploy *)",
+      "Bash(grep -A3 \"name: record$\" pubspec.lock)",
+      "Bash(flutter clean *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "Bash(dart analyze *)",
+      "Bash(firebase --version)",
+      "Bash(firebase projects:list)",
+      "Bash(git commit -m 'fix: correct storage.rules path syntax \\(no literal .jpg in match pattern\\) *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python3 -c ' *)",
+      "Bash(powershell -Command ' *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Zulfa\\\\OneDrive\\\\Desktop\\\\HelpLink\\\\lib\\\\screens\" -Recurse -Filter \"*.dart\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(mkdir -p \"c:\\\\Users\\\\Zulfa\\\\OneDrive\\\\Desktop\\\\HelpLink\\\\functions\\\\src\")",
+      "Bash(npm --version)",
+      "Bash(firebase functions:secrets:access GMAIL_EMAIL)",
+      "Bash(firebase functions:secrets:access GMAIL_APP_PASSWORD)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Zulfa\\\\OneDrive\\\\Desktop\\\\HelpLink\\\\assets\\\\images\\\\\" -File | Select-Object Name, @{Name='Size';Expression={\"{0:N0} bytes\" -f $_.Length}})",
+      "Bash(grep -E \"\\\\.\\(jpg|png\\)$\")",
+      "Bash(npm run *)",
+      "Bash(dart run *)",
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Zulfa\\\\OneDrive\\\\Desktop\\\\HelpLink\\\\lib\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(adb shell *)",
+      "Bash(gcloud run *)",
+      "PowerShell(gcloud run services add-iam-policy-binding sendemailverificationotp --member=\"allUsers\" --role=\"roles/run.invoker\" --region=\"asia-southeast1\" --project=\"helplink-73412\")",
+      "PowerShell(Get-Command gcloud -ErrorAction SilentlyContinue; if \\(Test-Path \"$env:LOCALAPPDATA\\\\Google\\\\Cloud SDK\\\\google-cloud-sdk\\\\bin\\\\gcloud.cmd\"\\) { echo \"Found at LocalAppData\" } elseif \\(Test-Path \"C:\\\\Program Files \\(x86\\)\\\\Google\\\\Cloud SDK\\\\google-cloud-sdk\\\\bin\\\\gcloud.cmd\"\\) { echo \"Found at Program Files x86\" } elseif \\(Test-Path \"C:\\\\Program Files\\\\Google\\\\Cloud SDK\\\\google-cloud-sdk\\\\bin\\\\gcloud.cmd\"\\) { echo \"Found at Program Files\" } else { echo \"Not found\" })",
+      "Bash(not exist *)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Zulfa\\\\OneDrive\\\\Desktop\\\\HelpLink\\\\lib\\\\config\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Zulfa\\OneDrive\\Desktop\\HelpLink\\functions"
     ]
   }
 }

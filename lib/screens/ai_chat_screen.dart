@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:lottie/lottie.dart';
 import 'package:helplink/models/user_model.dart';
@@ -78,7 +79,7 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
   static const double _expandedH = _headerH + _bodyH + _suggestH + _inputH;
 
   // ── Groq ─────────────────────────────────────────────────────────────────
-  static const String _groqApiKey = String.fromEnvironment('GROQ_API_KEY');
+  static String get _groqApiKey => dotenv.env['GROQ_API_KEY'] ?? '';
   static const String _groqModel = 'llama-3.1-8b-instant';
   static const String _groqUrl =
       'https://api.groq.com/openai/v1/chat/completions';

@@ -100,6 +100,7 @@ class _BeneficiaryRequestsScreenState
                     .where((r) =>
                         r.status == RequestStatus.matched ||
                         r.status == RequestStatus.active ||
+                        r.status == RequestStatus.pendingConfirmation ||
                         needsFeedback(r))
                     .length;
 
@@ -116,6 +117,7 @@ class _BeneficiaryRequestsScreenState
                         .where((r) =>
                             r.status == RequestStatus.matched ||
                             r.status == RequestStatus.active ||
+                            r.status == RequestStatus.pendingConfirmation ||
                             needsFeedback(r))
                         .toList();
                     break;
@@ -289,7 +291,8 @@ class _RequestCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: request.status == RequestStatus.matched ||
-                  request.status == RequestStatus.active
+                  request.status == RequestStatus.active ||
+                  request.status == RequestStatus.pendingConfirmation
               ? AppTheme.primaryPurple.withValues(alpha: 0.3)
               : const Color(0xFFE2E8F0),
         ),
@@ -328,7 +331,8 @@ class _RequestCard extends StatelessWidget {
 
           // Donor (only when matched/active)
           if ((request.status == RequestStatus.matched ||
-                  request.status == RequestStatus.active) &&
+                  request.status == RequestStatus.active ||
+                  request.status == RequestStatus.pendingConfirmation) &&
               request.donorName != null) ...[
             _iconRow(Icons.person_outline, 'Donor: ${request.donorName!}'),
             const SizedBox(height: 4),
@@ -346,8 +350,9 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Buttons
-          if (_isCompleted && request.beneficiaryFeedbackGiven)
-            // Feedback already given — full-width View Details only
+          if (request.status == RequestStatus.cancelled ||
+              (_isCompleted && request.beneficiaryFeedbackGiven))
+            // Cancelled or feedback already given — full-width View Details only
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -518,6 +523,11 @@ class _RequestCard extends StatelessWidget {
         bg = const Color(0xFFE3F2FD);
         fg = AppTheme.primaryBlue;
         label = 'In Progress';
+        break;
+      case RequestStatus.pendingConfirmation:
+        bg = const Color(0xFFE3F2FD);
+        fg = AppTheme.primaryBlue;
+        label = 'Awaiting Confirmation';
         break;
       case RequestStatus.completed:
         bg = Colors.grey[100]!;

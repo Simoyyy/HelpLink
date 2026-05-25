@@ -364,6 +364,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         return AppTheme.successGreen;
       case RequestStatus.completed:
         return AppTheme.primaryBlue;
+      case RequestStatus.pendingConfirmation:
+        return AppTheme.primaryBlue;
       default:
         return AppTheme.textMuted;
     }

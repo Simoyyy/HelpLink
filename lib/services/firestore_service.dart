@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:helplink/models/help_request_model.dart';
@@ -17,22 +18,44 @@ class FirestoreService {
   /// Returns null on success, error message on failure.
   Future<String?> createHelpRequest(HelpRequest request) async {
     try {
+      final col = _firestore.collection(AppConstants.helpRequestsCollection);
+
+      // ── Weekly limit (unchanged) ───────────────────────────────────────────
       final weekStart = _getWeekStart();
-      final existingRequests = await _firestore
-          .collection(AppConstants.helpRequestsCollection)
+      final thisWeek = await col
           .where('beneficiaryId', isEqualTo: request.beneficiaryId)
           .where('createdAt',
               isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
           .get();
-
-      if (existingRequests.docs.length >= AppConstants.maxRequestsPerWeek) {
+      if (thisWeek.docs.length >= AppConstants.maxRequestsPerWeek) {
         return 'You have reached the weekly limit of ${AppConstants.maxRequestsPerWeek} requests.';
       }
 
-      await _firestore
-          .collection(AppConstants.helpRequestsCollection)
-          .add(request.toFirestore());
+      // ── Concurrency: max 1 active (matched/active/pendingConfirmation) ───────
+      final active = await col
+          .where('beneficiaryId', isEqualTo: request.beneficiaryId)
+          .where('status', whereIn: [
+            RequestStatus.matched.name,
+            RequestStatus.active.name,
+            RequestStatus.pendingConfirmation.name,
+          ])
+          .get();
+      if (active.docs.isNotEmpty) {
+        return 'You already have an active request being helped. '
+            'Please wait for it to complete or cancel it first.';
+      }
 
+      // ── Concurrency: max 2 pending ─────────────────────────────────────────
+      final pending = await col
+          .where('beneficiaryId', isEqualTo: request.beneficiaryId)
+          .where('status', isEqualTo: RequestStatus.pending.name)
+          .get();
+      if (pending.docs.length >= 2) {
+        return 'You already have 2 pending requests. '
+            'Wait for a donor to accept one, or cancel a request first.';
+      }
+
+      await col.add(request.toFirestore());
       return null;
     } catch (e) {
       return 'Failed to submit request. Please try again.';
@@ -103,6 +126,7 @@ class FirestoreService {
         .where('status', whereIn: [
           RequestStatus.matched.name,
           RequestStatus.active.name,
+          RequestStatus.pendingConfirmation.name,
         ])
         .orderBy('matchedAt', descending: true)
         .snapshots()
@@ -110,7 +134,7 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// Stream donor's ongoing (matched + active) and completed requests combined
+  /// Stream donor's ongoing (matched + active + pendingConfirmation) and completed requests combined
   Stream<List<HelpRequest>> getDonorOngoingRequests(String donorId) {
     return _firestore
         .collection(AppConstants.helpRequestsCollection)
@@ -118,6 +142,7 @@ class FirestoreService {
         .where('status', whereIn: [
           RequestStatus.matched.name,
           RequestStatus.active.name,
+          RequestStatus.pendingConfirmation.name,
           RequestStatus.completed.name,
         ])
         .orderBy('matchedAt', descending: true)
@@ -196,6 +221,38 @@ class FirestoreService {
     required String donorName,
   }) async {
     try {
+      // Check if donor is currently banned
+      final userDoc = await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(donorId)
+          .get();
+      final userData = userDoc.data();
+      if (userData != null) {
+        final banUntil = (userData['banUntil'] as Timestamp?)?.toDate();
+        if (banUntil != null && banUntil.isAfter(DateTime.now())) {
+          final remaining = banUntil.difference(DateTime.now());
+          final h = remaining.inHours;
+          final m = remaining.inMinutes % 60;
+          return 'You are temporarily banned from accepting requests. '
+              'Ban lifts in ${h}h ${m}m.';
+        }
+      }
+
+      // Check donor concurrency limit (max 3 active)
+      final activeSnap = await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .where('donorId', isEqualTo: donorId)
+          .where('status', whereIn: [
+            RequestStatus.matched.name,
+            RequestStatus.active.name,
+            RequestStatus.pendingConfirmation.name,
+          ])
+          .get();
+      if (activeSnap.docs.length >= 3) {
+        return 'You already have 3 active requests. '
+            'Complete or cancel one before accepting another.';
+      }
+
       await _firestore
           .collection(AppConstants.helpRequestsCollection)
           .doc(requestId)
@@ -208,6 +265,24 @@ class FirestoreService {
       return null;
     } catch (e) {
       return 'Failed to offer help. Please try again.';
+    }
+  }
+
+  /// Get number of active requests a donor currently holds
+  Future<int> getDonorActiveCount(String donorId) async {
+    try {
+      final snap = await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .where('donorId', isEqualTo: donorId)
+          .where('status', whereIn: [
+            RequestStatus.matched.name,
+            RequestStatus.active.name,
+            RequestStatus.pendingConfirmation.name,
+          ])
+          .get();
+      return snap.docs.length;
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -283,7 +358,7 @@ class FirestoreService {
     }
   }
 
-  /// Cancel a help request
+  /// Cancel a help request (sets status to cancelled)
   Future<bool> cancelRequest(String requestId) async {
     try {
       await _firestore
@@ -294,6 +369,250 @@ class FirestoreService {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Donor withdraws from a request — resets it to pending so another donor can help
+  Future<bool> withdrawFromRequest(String requestId) async {
+    try {
+      await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .update({
+        'status': RequestStatus.pending.name,
+        'donorId': null,
+        'donorName': null,
+        'matchedAt': null,
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Donor withdraws after acceptance with a reason — applies a strike.
+  /// Returns: 'warning' (1st strike), 'banned' (2nd strike → 24h ban), null = error.
+  Future<String?> withdrawWithReason({
+    required String requestId,
+    required String donorId,
+    required String reason,
+  }) async {
+    try {
+      final strikeResult = await _applyDonorStrike(donorId);
+      await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .update({
+        'status': RequestStatus.pending.name,
+        'donorId': null,
+        'donorName': null,
+        'matchedAt': null,
+        'cancellationReason': reason,
+        'cancelledBy': 'donor',
+      });
+      return strikeResult;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Cancel a request with a required reason.
+  /// If [cancelledBy] == 'donor', applies a strike to [donorId].
+  /// Returns: 'success' (no strike), 'warning' (1st strike), 'banned' (2nd → ban), null = error.
+  Future<String?> cancelRequestWithReason({
+    required String requestId,
+    required String reason,
+    required String cancelledBy,
+    String? donorId,
+  }) async {
+    try {
+      String result = 'success';
+      if (cancelledBy == 'donor' && donorId != null) {
+        result = await _applyDonorStrike(donorId);
+      }
+      await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .update({
+        'status': RequestStatus.cancelled.name,
+        'cancellationReason': reason,
+        'cancelledBy': cancelledBy,
+      });
+      return result;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Fetch current strike info for a donor.
+  Future<Map<String, dynamic>> getDonorStrikeInfo(String donorId) async {
+    try {
+      final doc = await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(donorId)
+          .get();
+      final data = doc.data() ?? {};
+      return {
+        'strikes': (data['cancellationStrikes'] as int?) ?? 0,
+        'banUntil': (data['banUntil'] as Timestamp?)?.toDate(),
+        'strikeWindowStart': (data['strikeWindowStart'] as Timestamp?)?.toDate(),
+      };
+    } catch (e) {
+      return {'strikes': 0, 'banUntil': null, 'strikeWindowStart': null};
+    }
+  }
+
+  /// Increments donor's cancellation strike counter within a 30-day rolling window.
+  /// Resets counter if window has expired. On 2nd strike, applies a 24h ban.
+  /// Returns 'warning' (1st strike) or 'banned' (2nd strike).
+  Future<String> _applyDonorStrike(String donorId) async {
+    final userRef =
+        _firestore.collection(AppConstants.usersCollection).doc(donorId);
+    return _firestore.runTransaction<String>((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? {};
+
+      int strikes = (data['cancellationStrikes'] as int?) ?? 0;
+      final windowStart = (data['strikeWindowStart'] as Timestamp?)?.toDate();
+      final now = DateTime.now();
+
+      // Reset if 30-day window has expired
+      if (windowStart != null && now.difference(windowStart).inDays >= 30) {
+        strikes = 0;
+      }
+
+      strikes += 1;
+
+      if (strikes >= 2) {
+        final banUntil = now.add(const Duration(hours: 24));
+        tx.update(userRef, {
+          'cancellationStrikes': 0,
+          'strikeWindowStart': null,
+          'banUntil': Timestamp.fromDate(banUntil),
+        });
+        return 'banned';
+      } else {
+        tx.update(userRef, {
+          'cancellationStrikes': strikes,
+          'strikeWindowStart': windowStart == null
+              ? Timestamp.fromDate(now)
+              : data['strikeWindowStart'],
+        });
+        return 'warning';
+      }
+    });
+  }
+
+  // ══════════════════════════════════════════════
+  // COMPLETION VALIDATION
+  // ══════════════════════════════════════════════
+
+  /// Generate (or replace) the completion verification token for a request.
+  Future<String> generateCompletionToken(String requestId) async {
+    final token = _randomToken();
+    await _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .update({'completionToken': token});
+    return token;
+  }
+
+  /// Clear the completion token (beneficiary hides QR).
+  Future<void> revokeCompletionToken(String requestId) async {
+    await _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .update({'completionToken': null});
+  }
+
+  /// Donor submits delivery (optional photo) → status becomes pendingConfirmation.
+  Future<bool> submitDelivery({
+    required String requestId,
+    String? photoUrl,
+  }) async {
+    try {
+      await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .update({
+        'status': RequestStatus.pendingConfirmation.name,
+        'deliveredAt': FieldValue.serverTimestamp(),
+        if (photoUrl != null) 'completionPhotoUrl': photoUrl,
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Beneficiary confirms receipt → request completed (mutual method).
+  Future<bool> confirmDelivery(String requestId) async {
+    try {
+      await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .update({
+        'status': RequestStatus.completed.name,
+        'completedAt': FieldValue.serverTimestamp(),
+        'completionMethod': 'mutual',
+        'completionToken': null,
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Donor scans QR — verify token then immediately complete the request.
+  Future<bool> verifyQrAndComplete({
+    required String requestId,
+    required String token,
+    String? photoUrl,
+  }) async {
+    try {
+      final doc = await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .doc(requestId)
+          .get();
+      if (!doc.exists) return false;
+      final stored = doc.data()?['completionToken'] as String?;
+      if (stored == null || stored != token) return false;
+
+      await doc.reference.update({
+        'status': RequestStatus.completed.name,
+        'completedAt': FieldValue.serverTimestamp(),
+        'completionMethod': 'qr',
+        'completionToken': null,
+        if (photoUrl != null) 'completionPhotoUrl': photoUrl,
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Upload a delivery proof photo to Firebase Storage.
+  Future<String?> uploadCompletionPhoto({
+    required String requestId,
+    required File photoFile,
+  }) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('completion_photos')
+          .child('$requestId.jpg');
+      await ref.putFile(photoFile, SettableMetadata(contentType: 'image/jpeg'));
+      return await ref.getDownloadURL();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Cryptographically random 32-character alphanumeric token.
+  String _randomToken() {
+    const chars =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    final rng = Random.secure();
+    return List.generate(32, (_) => chars[rng.nextInt(chars.length)]).join();
   }
 
   // ══════════════════════════════════════════════
@@ -387,6 +706,76 @@ class FirestoreService {
       return messages;
     });
   }
+
+  // ── Live location ──────────────────────────────────────────────────────────
+
+  Future<String> createLiveLocationSession({
+    required String requestId,
+    required String senderId,
+    required String senderName,
+    required double latitude,
+    required double longitude,
+    required DateTime expiryTime,
+  }) async {
+    final doc = await _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .collection('liveLocations')
+        .add({
+      'senderId': senderId,
+      'senderName': senderName,
+      'latitude': latitude,
+      'longitude': longitude,
+      'startTime': FieldValue.serverTimestamp(),
+      'expiryTime': Timestamp.fromDate(expiryTime),
+      'isActive': true,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+    return doc.id;
+  }
+
+  Future<void> updateLiveLocation({
+    required String requestId,
+    required String sessionId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    await _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .collection('liveLocations')
+        .doc(sessionId)
+        .update({
+      'latitude': latitude,
+      'longitude': longitude,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> stopLiveLocationSession({
+    required String requestId,
+    required String sessionId,
+  }) async {
+    await _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .collection('liveLocations')
+        .doc(sessionId)
+        .update({'isActive': false});
+  }
+
+  Stream<Map<String, dynamic>?> getLiveLocationStream(
+      String requestId, String sessionId) {
+    return _firestore
+        .collection(AppConstants.helpRequestsCollection)
+        .doc(requestId)
+        .collection('liveLocations')
+        .doc(sessionId)
+        .snapshots()
+        .map((doc) => doc.exists ? doc.data() : null);
+  }
+
+  // ── Conversations ──────────────────────────────────────────────────────────
 
   /// Stream help requests where a beneficiary has an active conversation
   Stream<List<HelpRequest>> getBeneficiaryConversations(String beneficiaryId) {

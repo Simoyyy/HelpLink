@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/screens/auth/login_screen.dart';
+import 'package:helplink/screens/auth/email_verification_screen.dart';
 import 'package:helplink/screens/donor/donor_dashboard.dart';
 import 'package:helplink/screens/beneficiary/beneficiary_dashboard.dart';
 
@@ -33,6 +34,10 @@ class AuthWrapper extends StatelessWidget {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
+              }
+
+              if (!userModel.isEmailVerified) {
+                return const EmailVerificationScreen();
               }
 
               if (userModel.role == UserRole.donor) {

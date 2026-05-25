@@ -11,7 +11,7 @@ import 'package:helplink/screens/donor/chat_screen.dart';
 import 'package:helplink/screens/feedback_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 
-enum _StatusFilter { all, pending, accepted, completed }
+enum _StatusFilter { all, pending, accepted, completed, cancelled }
 
 enum _DateFilter { allTime, today, thisWeek, thisMonth }
 
@@ -57,12 +57,17 @@ class _HistoryContentState extends State<_HistoryContent> {
         list = list
             .where((r) =>
                 r.status == RequestStatus.matched ||
-                r.status == RequestStatus.active)
+                r.status == RequestStatus.active ||
+                r.status == RequestStatus.pendingConfirmation)
             .toList();
         break;
       case _StatusFilter.completed:
         list =
             list.where((r) => r.status == RequestStatus.completed).toList();
+        break;
+      case _StatusFilter.cancelled:
+        list =
+            list.where((r) => r.status == RequestStatus.cancelled).toList();
         break;
       case _StatusFilter.all:
         break;
@@ -190,6 +195,8 @@ class _HistoryContentState extends State<_HistoryContent> {
                     _statusChip('Accepted', _StatusFilter.accepted),
                     const SizedBox(width: 8),
                     _statusChip('Completed', _StatusFilter.completed),
+                    const SizedBox(width: 8),
+                    _statusChip('Cancelled', _StatusFilter.cancelled),
                   ],
                 ),
               ),
@@ -322,9 +329,11 @@ class _HistoryCard extends StatelessWidget {
     final dateStr =
         DateFormat('M/d/yyyy').format(request.createdAt);
     final isAccepted = request.status == RequestStatus.matched ||
-        request.status == RequestStatus.active;
+        request.status == RequestStatus.active ||
+        request.status == RequestStatus.pendingConfirmation;
     final isCompleted = request.status == RequestStatus.completed;
     final isPending = request.status == RequestStatus.pending;
+    final isCancelled = request.status == RequestStatus.cancelled;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -485,6 +494,22 @@ class _HistoryCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                )
+              else if (isCancelled)
+                _textLink(
+                  'View Details',
+                  Icons.arrow_forward,
+                  AppTheme.errorRed,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BeneficiaryRequestDetailScreen(
+                        request: request,
+                        userId: userId,
+                        userName: userName,
+                      ),
+                    ),
+                  ),
                 ),
 
               const Spacer(),
@@ -569,6 +594,11 @@ class _HistoryCard extends StatelessWidget {
         break;
       case RequestStatus.active:
         label = 'Accepted';
+        color = AppTheme.primaryBlue;
+        bg = const Color(0xFFE3F2FD);
+        break;
+      case RequestStatus.pendingConfirmation:
+        label = 'Awaiting Confirmation';
         color = AppTheme.primaryBlue;
         bg = const Color(0xFFE3F2FD);
         break;

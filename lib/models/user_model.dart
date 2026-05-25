@@ -18,6 +18,11 @@ class UserModel {
   final bool isICVerified;
   final DateTime? icVerifiedAt;
 
+  // Donor moderation
+  final int cancellationStrikes;
+  final DateTime? strikeWindowStart;
+  final DateTime? banUntil;
+
   UserModel({
     required this.uid,
     required this.fullName,
@@ -33,7 +38,16 @@ class UserModel {
     this.phoneNumber,
     this.isICVerified = false,
     this.icVerifiedAt,
+    this.cancellationStrikes = 0,
+    this.strikeWindowStart,
+    this.banUntil,
   });
+
+  bool get isBanned =>
+      banUntil != null && banUntil!.isAfter(DateTime.now());
+
+  Duration get banRemaining =>
+      isBanned ? banUntil!.difference(DateTime.now()) : Duration.zero;
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -54,6 +68,9 @@ class UserModel {
       phoneNumber: data['phoneNumber'],
       isICVerified: data['isICVerified'] == true,
       icVerifiedAt: (data['icVerifiedAt'] as Timestamp?)?.toDate(),
+      cancellationStrikes: (data['cancellationStrikes'] as int?) ?? 0,
+      strikeWindowStart: (data['strikeWindowStart'] as Timestamp?)?.toDate(),
+      banUntil: (data['banUntil'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -73,6 +90,11 @@ class UserModel {
       'isICVerified': isICVerified,
       'icVerifiedAt':
           icVerifiedAt != null ? Timestamp.fromDate(icVerifiedAt!) : null,
+      'cancellationStrikes': cancellationStrikes,
+      'strikeWindowStart': strikeWindowStart != null
+          ? Timestamp.fromDate(strikeWindowStart!)
+          : null,
+      'banUntil': banUntil != null ? Timestamp.fromDate(banUntil!) : null,
     };
   }
 
@@ -89,6 +111,9 @@ class UserModel {
     String? phoneNumber,
     bool? isICVerified,
     DateTime? icVerifiedAt,
+    int? cancellationStrikes,
+    DateTime? strikeWindowStart,
+    DateTime? banUntil,
   }) {
     return UserModel(
       uid: uid,
@@ -105,6 +130,9 @@ class UserModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       isICVerified: isICVerified ?? this.isICVerified,
       icVerifiedAt: icVerifiedAt ?? this.icVerifiedAt,
+      cancellationStrikes: cancellationStrikes ?? this.cancellationStrikes,
+      strikeWindowStart: strikeWindowStart ?? this.strikeWindowStart,
+      banUntil: banUntil ?? this.banUntil,
     );
   }
 }

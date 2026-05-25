@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
@@ -187,12 +188,13 @@ function passwordResetTemplate(code: string, name: string): string {
 // ─── Cloud Functions ─────────────────────────────────────────────────────────
 
 export const sendEmailVerificationOTP = onCall(
-  { secrets: [gmailEmail, gmailPassword] },
+  { secrets: [gmailEmail, gmailPassword], enforceAppCheck: false, invoker: 'public' },
   async (request) => {
-    const { uid, email, name } = request.data as {
+    const { uid, email, name, fcmToken } = request.data as {
       uid: string;
       email: string;
       name?: string;
+      fcmToken?: string;
     };
 
     if (!uid || !email) {
@@ -212,6 +214,27 @@ export const sendEmailVerificationOTP = onCall(
       used: false,
     });
 
+    // Send push notification to device
+    let fcmSent = false;
+    if (fcmToken) {
+      try {
+        await admin.messaging().send({
+          token: fcmToken,
+          notification: {
+            title: "HelpLink Verification Code",
+            body: `Your verification code is: ${code}. Valid for 15 minutes.`,
+          },
+          data: { type: "otp", code },
+          android: { priority: "high" },
+          apns: { payload: { aps: { sound: "default", badge: 1 } } },
+        });
+        fcmSent = true;
+      } catch (fcmErr) {
+        console.error("FCM send failed:", fcmErr);
+      }
+    }
+
+    // Send email
     try {
       const transport = createTransport(gmailEmail.value(), gmailPassword.value());
       await transport.sendMail({
@@ -221,17 +244,22 @@ export const sendEmailVerificationOTP = onCall(
         html: verificationTemplate(code, name ?? "there"),
       });
     } catch (err) {
-      throw new HttpsError(
-        "unavailable",
-        "Failed to send verification email. Please try again."
-      );
+      console.error("Email send failed:", err);
+      if (!fcmSent) {
+        throw new HttpsError(
+          "unavailable",
+          "Failed to send verification code. Please try again."
+        );
+      }
     }
 
     return { success: true };
   }
 );
 
-export const verifyEmailOTP = onCall(async (request) => {
+export const verifyEmailOTP = onCall(
+  { enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
   const { uid, code } = request.data as { uid: string; code: string };
 
   if (!uid || !code) {
@@ -262,13 +290,13 @@ export const verifyEmailOTP = onCall(async (request) => {
   }
 
   await snap.ref.update({ used: true });
-  await db.collection("users").doc(uid).update({ isEmailVerified: true });
+  // Firestore user document is created client-side after this returns.
 
   return { success: true };
 });
 
 export const sendPasswordResetOTP = onCall(
-  { secrets: [gmailEmail, gmailPassword] },
+  { secrets: [gmailEmail, gmailPassword], enforceAppCheck: false, invoker: 'public' },
   async (request) => {
     const { email } = request.data as { email: string };
 
@@ -324,7 +352,9 @@ export const sendPasswordResetOTP = onCall(
   }
 );
 
-export const checkPasswordResetCode = onCall(async (request) => {
+export const checkPasswordResetCode = onCall(
+  { enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
   const { email, code } = request.data as { email: string; code: string };
 
   if (!email || !code) {
@@ -365,7 +395,49 @@ export const checkPasswordResetCode = onCall(async (request) => {
   return { success: true };
 });
 
-export const resetPasswordWithOTP = onCall(async (request) => {
+// ─── Stale Request Auto-Withdrawal ──────────────────────────────────────────
+
+export const processStaleRequests = onSchedule(
+  { schedule: "every 30 minutes", region: "asia-southeast1" },
+  async () => {
+    const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
+    const staleSnap = await db
+      .collection("help_requests")
+      .where("status", "in", ["matched", "active"])
+      .where("matchedAt", "<=", admin.firestore.Timestamp.fromDate(cutoff))
+      .get();
+
+    if (staleSnap.empty) return;
+
+    const batches: admin.firestore.WriteBatch[] = [];
+    let batch = db.batch();
+    let opCount = 0;
+
+    for (const doc of staleSnap.docs) {
+      batch.update(doc.ref, {
+        status: "cancelled",
+        cancelledBy: "system",
+        cancelReason: "Auto-cancelled: delivery not completed within 4 hours",
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      opCount++;
+      // Firestore batch limit is 500 operations
+      if (opCount === 499) {
+        batches.push(batch);
+        batch = db.batch();
+        opCount = 0;
+      }
+    }
+    if (opCount > 0) batches.push(batch);
+
+    await Promise.all(batches.map((b) => b.commit()));
+    console.log(`Auto-withdrew ${staleSnap.docs.length} stale request(s).`);
+  }
+);
+
+export const resetPasswordWithOTP = onCall(
+  { enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
   const { email, code, newPassword } = request.data as {
     email: string;
     code: string;

@@ -37,10 +37,16 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      final route = authService.activeRole == UserRole.donor
-          ? '/donor-dashboard'
-          : '/beneficiary-dashboard';
-      Navigator.pushReplacementNamed(context, route);
+      final userModel = authService.userModel;
+      if (userModel != null && !userModel.isEmailVerified) {
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/verify-email', (r) => false);
+      } else {
+        final route = authService.activeRole == UserRole.donor
+            ? '/donor-dashboard'
+            : '/beneficiary-dashboard';
+        Navigator.pushNamedAndRemoveUntil(context, route, (r) => false);
+      }
     } else {
       _showError(authService.errorMessage ?? 'Login failed');
     }

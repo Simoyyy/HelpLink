@@ -32,7 +32,6 @@ class _DonorDashboardState extends State<DonorDashboard> {
   final _aiService = AIService();
   Future<List<RecommendedRequest>>? _recommendationsFuture;
   bool _recInitialized = false;
-  bool _verificationPromptShown = false;
   Future<Map<String, int>>? _statsFuture;
 
   VoidCallback? _closeChat;
@@ -60,10 +59,11 @@ class _DonorDashboardState extends State<DonorDashboard> {
   }
 
   void _checkVerification() {
-    if (_verificationPromptShown) return;
-    final user = Provider.of<AuthService>(context, listen: false).userModel;
+    final authService = Provider.of<AuthService>(context, listen: false);
+    if (authService.icVerificationPromptShown) return;
+    final user = authService.userModel;
     if (user != null && user.isICVerified != true) {
-      _verificationPromptShown = true;
+      authService.markICVerificationPromptShown();
       showModalBottomSheet(
         context: context,
         isDismissible: false,

@@ -15,21 +15,34 @@ class OtpInputBox extends StatefulWidget {
   State<OtpInputBox> createState() => OtpInputBoxState();
 }
 
-class OtpInputBoxState extends State<OtpInputBox> {
+class OtpInputBoxState extends State<OtpInputBox> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _focusNode.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When Android backgrounds the app the IME disconnects, but FocusNode
+    // still reports hasFocus=true. requestFocus() is then a no-op and the
+    // keyboard never reappears. Unfocusing on resume resets the state so
+    // the next tap triggers a fresh IME connection.
+    if (state == AppLifecycleState.resumed && _focusNode.hasFocus) {
+      _focusNode.unfocus();
+    }
   }
 
   void clear() {
@@ -37,6 +50,12 @@ class OtpInputBoxState extends State<OtpInputBox> {
     setState(() {});
     _focusNode.requestFocus();
     widget.onChanged('');
+  }
+
+  void fill(String code) {
+    _controller.text = code;
+    setState(() {});
+    widget.onChanged(code);
   }
 
   @override
@@ -47,22 +66,28 @@ class OtpInputBoxState extends State<OtpInputBox> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Hidden but active TextField — captures keyboard input
-        Offstage(
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            maxLength: 6,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              counterText: '',
-              border: InputBorder.none,
+        // Hidden but active TextField — captures keyboard input.
+        // SizedBox(height:0) keeps the field in the render tree so Android's
+        // IME connects properly (Offstage drops it from the IME connection).
+        // ClipRect prevents the text from visually overflowing the 0-height bounds.
+        ClipRect(
+          child: SizedBox(
+            height: 0,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              maxLength: 6,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                counterText: '',
+                border: InputBorder.none,
+              ),
+              onChanged: (v) {
+                setState(() {});
+                widget.onChanged(v);
+              },
             ),
-            onChanged: (v) {
-              setState(() {});
-              widget.onChanged(v);
-            },
           ),
         ),
         // Visual: single box with 6 underline slots

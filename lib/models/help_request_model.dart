@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum RequestStatus { pending, matched, active, completed, cancelled }
+enum RequestStatus { pending, matched, active, pendingConfirmation, completed, cancelled }
 
 enum RequestCategory { food, medical, education, transportation, housing, other }
 
@@ -24,6 +24,13 @@ class HelpRequest {
   final bool isEmergency;
   final bool donorFeedbackGiven;
   final bool beneficiaryFeedbackGiven;
+  final String? cancellationReason;
+  final String? cancelledBy; // 'beneficiary' or 'donor'
+  final DateTime? autoWithdrawnAt;
+  final String? completionToken;
+  final String? completionPhotoUrl;
+  final String? completionMethod; // 'qr' or 'mutual'
+  final DateTime? deliveredAt;
 
   HelpRequest({
     required this.id,
@@ -45,6 +52,13 @@ class HelpRequest {
     this.isEmergency = false,
     this.donorFeedbackGiven = false,
     this.beneficiaryFeedbackGiven = false,
+    this.cancellationReason,
+    this.cancelledBy,
+    this.autoWithdrawnAt,
+    this.completionToken,
+    this.completionPhotoUrl,
+    this.completionMethod,
+    this.deliveredAt,
   });
 
   factory HelpRequest.fromFirestore(DocumentSnapshot doc) {
@@ -69,6 +83,13 @@ class HelpRequest {
       isEmergency: data['isEmergency'] == true,
       donorFeedbackGiven: data['donorFeedbackGiven'] == true,
       beneficiaryFeedbackGiven: data['beneficiaryFeedbackGiven'] == true,
+      cancellationReason: data['cancellationReason'] as String?,
+      cancelledBy: data['cancelledBy'] as String?,
+      autoWithdrawnAt: (data['autoWithdrawnAt'] as Timestamp?)?.toDate(),
+      completionToken: data['completionToken'] as String?,
+      completionPhotoUrl: data['completionPhotoUrl'] as String?,
+      completionMethod: data['completionMethod'] as String?,
+      deliveredAt: (data['deliveredAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -78,6 +99,8 @@ class HelpRequest {
         return RequestStatus.matched;
       case 'active':
         return RequestStatus.active;
+      case 'pendingConfirmation':
+        return RequestStatus.pendingConfirmation;
       case 'completed':
         return RequestStatus.completed;
       case 'cancelled':

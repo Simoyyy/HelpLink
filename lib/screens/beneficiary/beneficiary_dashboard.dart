@@ -31,7 +31,6 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   int _filterDays = 0;
   RequestCategory? _filterCategory;
   final Set<String> _seenMatchIds = {};
-  final bool _verificationPromptShown = false;
   Future<Map<String, int>>? _statsFuture;
 
   List<HelpRequest> _applyFilters(List<HelpRequest> requests) {
@@ -244,7 +243,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
               .where((r) =>
                   r.status == RequestStatus.pending ||
                   r.status == RequestStatus.matched ||
-                  r.status == RequestStatus.active)
+                  r.status == RequestStatus.active ||
+                  r.status == RequestStatus.pendingConfirmation)
               .length;
           final bool hasNewMatch = requests
               .where((r) => r.status == RequestStatus.matched)
@@ -1237,6 +1237,11 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
         bgColor = const Color(0xFFE3F2FD);
         textColor = AppTheme.primaryBlue;
         icon = Icons.bolt_rounded;
+        break;
+      case RequestStatus.pendingConfirmation:
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = AppTheme.primaryBlue;
+        icon = Icons.pending_rounded;
         break;
       case RequestStatus.completed:
         bgColor = Colors.grey[100]!;

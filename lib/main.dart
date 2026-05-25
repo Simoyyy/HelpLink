@@ -1,4 +1,6 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:helplink/services/auth_service.dart';
@@ -19,9 +21,19 @@ import 'package:helplink/screens/donor/set_location_screen.dart';
 import 'package:helplink/screens/ic_verification_screen.dart';
 import 'package:helplink/utils/theme.dart';
 
+@pragma('vm:entry-point')
+Future<void> _bgMessageHandler(RemoteMessage message) async {}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
   await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_bgMessageHandler);
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
   runApp(const HelpLinkApp());
 }
 

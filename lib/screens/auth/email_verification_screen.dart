@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +18,35 @@ class EmailVerificationScreen extends StatefulWidget {
 class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   final _otpKey = GlobalKey<OtpInputBoxState>();
   String _code = '';
+  StreamSubscription<RemoteMessage>? _fcmSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _fcmSub = FirebaseMessaging.onMessage.listen((message) {
+      if (!mounted) return;
+      final type = message.data['type'];
+      final code = message.data['code'];
+      if (type == 'otp' && code != null && (code as String).length == 6) {
+        _otpKey.currentState?.fill(code);
+        setState(() => _code = code);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Verification code received!'),
+            backgroundColor: HelpLinkTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _fcmSub?.cancel();
+    super.dispose();
+  }
 
   Future<void> _verify() async {
     if (_code.length < 6) return;
@@ -32,7 +63,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
     } else {
       _otpKey.currentState?.clear();
       setState(() => _code = '');
@@ -101,8 +132,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 IconButton(
-                  onPressed: () =>
-                      Navigator.pushReplacementNamed(context, '/signup'),
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    } else {
+                      Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+                    }
+                  },
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   padding: EdgeInsets.zero,
                   alignment: Alignment.centerLeft,

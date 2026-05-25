@@ -50,6 +50,18 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    // ── liveLocations (subcollection of help_requests) ────────────────────────
+    // Both parties on the request need to read the stream.
+    // Only the sender can create their own session and update their own position.
+    match /help_requests/{requestId}/liveLocations/{sessionId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() &&
+        request.resource.data.senderId == request.auth.uid;
+      allow update: if isAuth() &&
+        resource.data.senderId == request.auth.uid;
+      allow delete: if false;
+    }
+
     // ── feedbacks ─────────────────────────────────────────────────────────────
     // Any signed-in user can read feedback.
     // Only the reviewer can submit their own feedback.
