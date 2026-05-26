@@ -21,8 +21,28 @@ import 'package:helplink/screens/donor/set_location_screen.dart';
 import 'package:helplink/screens/ic_verification_screen.dart';
 import 'package:helplink/utils/theme.dart';
 
+final _navigatorKey = GlobalKey<NavigatorState>();
+
 @pragma('vm:entry-point')
 Future<void> _bgMessageHandler(RemoteMessage message) async {}
+
+void _handleNotificationTap(RemoteMessage message) {
+  final type = message.data['type'] as String?;
+  final nav = _navigatorKey.currentState;
+  if (nav == null) return;
+
+  switch (type) {
+    case 'chat_message':
+    case 'request_accepted':
+      nav.pushNamedAndRemoveUntil('/beneficiary-dashboard', (_) => false);
+      break;
+    case 'emergency_request':
+      nav.pushNamedAndRemoveUntil('/donor-dashboard', (_) => false);
+      break;
+    default:
+      break;
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +54,26 @@ void main() async {
     badge: true,
     sound: true,
   );
+
+  // Create the default Android notification channel so high-priority
+  // notifications appear as heads-up banners even when the app is closed.
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  // Handle notification tap when app was in background
+  FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
+  // Handle notification tap when app was fully terminated
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _handleNotificationTap(initialMessage),
+    );
+  }
+
   runApp(const HelpLinkApp());
 }
 
@@ -51,6 +91,7 @@ class HelpLinkApp extends StatelessWidget {
         title: 'HelpLink',
         debugShowCheckedModeBanner: false,
         theme: HelpLinkTheme.lightTheme,
+        navigatorKey: _navigatorKey,
         initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginScreen(),

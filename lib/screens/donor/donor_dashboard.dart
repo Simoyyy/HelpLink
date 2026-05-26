@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -38,10 +40,12 @@ class _DonorDashboardState extends State<DonorDashboard> {
 
   VoidCallback? _closeChat;
   final _shownEmergencyIds = <String>{};
+  StreamSubscription<RemoteMessage>? _fcmSub;
 
   @override
   void dispose() {
     _closeChat?.call();
+    _fcmSub?.cancel();
     super.dispose();
   }
 
@@ -59,7 +63,26 @@ class _DonorDashboardState extends State<DonorDashboard> {
       _loadStats();
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkVerification());
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkEmergencyRequests());
+      _fcmSub = FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     }
+  }
+
+  void _onForegroundMessage(RemoteMessage message) {
+    if (!mounted) return;
+    if (message.data['type'] != 'emergency_request') return;
+    final requestId = message.data['requestId'] as String?;
+    if (requestId == null || _shownEmergencyIds.contains(requestId)) return;
+
+    final fs = Provider.of<FirestoreService>(context, listen: false);
+    fs.getRequestStream(requestId).first.then((req) {
+      if (req == null || !mounted) return;
+      _shownEmergencyIds.add(requestId);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EmergencyRequestPrompt(request: req),
+      );
+    });
   }
 
   Future<void> _checkEmergencyRequests() async {

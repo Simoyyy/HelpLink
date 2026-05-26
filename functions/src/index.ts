@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
@@ -490,3 +491,158 @@ export const resetPasswordWithOTP = onCall(
 
   return { success: true };
 });
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function sendPush(
+  token: string,
+  title: string,
+  body: string,
+  data: Record<string, string> = {}
+): Promise<void> {
+  try {
+    await admin.messaging().send({
+      token,
+      notification: { title, body },
+      data,
+      android: { priority: "high" },
+      apns: { payload: { aps: { sound: "default", badge: 1 } } },
+    });
+  } catch (err) {
+    console.error("FCM send failed:", err);
+  }
+}
+
+// ─── New chat message → notify receiver ──────────────────────────────────────
+
+export const onChatMessageCreated = onDocumentCreated(
+  "help_requests/{requestId}/messages/{messageId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const receiverId = data.receiverId as string | undefined;
+    const senderName = (data.senderName as string | undefined) ?? "Someone";
+    const messageType = (data.messageType as string | undefined) ?? "text";
+    const content = (data.content as string | undefined) ?? "";
+
+    if (!receiverId) return;
+
+    const body =
+      messageType === "audio"
+        ? `${senderName} sent you a voice message`
+        : messageType === "location" || messageType === "liveLocation"
+        ? `${senderName} shared their location`
+        : `${senderName}: ${content.length > 80 ? content.slice(0, 77) + "…" : content}`;
+
+    const receiverDoc = await db.collection("users").doc(receiverId).get();
+    const fcmToken = receiverDoc.data()?.fcmToken as string | undefined;
+    if (!fcmToken) return;
+
+    await sendPush(fcmToken, "New Message", body, {
+      type: "chat_message",
+      requestId: event.params.requestId,
+    });
+  }
+);
+
+// ─── Emergency request → notify nearby donors ─────────────────────────────────
+
+export const onEmergencyRequestCreated = onDocumentCreated(
+  "help_requests/{requestId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    if (!data.isEmergency || data.status !== "pending") return;
+
+    const { latitude, longitude, title, beneficiaryName, beneficiaryId } = data;
+    if (latitude == null || longitude == null) return;
+
+    const donorsSnap = await db.collection("users")
+      .where("role", "==", "donor")
+      .get();
+
+    const tokens: string[] = [];
+    for (const doc of donorsSnap.docs) {
+      const d = doc.data();
+      if (!d.fcmToken) continue;
+      if (d.uid === beneficiaryId) continue;
+      if (d.latitude == null || d.longitude == null) continue;
+      const dist = haversineKm(latitude, longitude, d.latitude, d.longitude);
+      if (dist <= 5) tokens.push(d.fcmToken as string);
+    }
+
+    if (tokens.length === 0) return;
+
+    const name = (beneficiaryName as string | undefined) ?? "Someone";
+    const requestTitle = (title as string | undefined) ?? "Emergency";
+
+    // FCM sendEach supports up to 500 messages per call
+    for (let i = 0; i < tokens.length; i += 500) {
+      const chunk = tokens.slice(i, i + 500).map((token) => ({
+        token,
+        notification: {
+          title: "🚨 Emergency Request Nearby!",
+          body: `${name} urgently needs help: "${requestTitle}"`,
+        },
+        data: {
+          type: "emergency_request",
+          requestId: event.params.requestId,
+        },
+        android: { priority: "high" as const },
+        apns: { payload: { aps: { sound: "default", badge: 1 } } },
+      }));
+      await admin.messaging().sendEach(chunk);
+    }
+
+    console.log(`Emergency alert sent to ${tokens.length} nearby donor(s).`);
+  }
+);
+
+// ─── Request matched → notify beneficiary ────────────────────────────────────
+
+export const onRequestMatched = onDocumentUpdated(
+  "help_requests/{requestId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    // Only fire when status transitions TO "matched"
+    if (before.status === "matched" || after.status !== "matched") return;
+
+    const beneficiaryId = after.beneficiaryId as string | undefined;
+    const donorName = (after.donorName as string | undefined) ?? "A donor";
+    const requestTitle = (after.title as string | undefined) ?? "your request";
+
+    if (!beneficiaryId) return;
+
+    const beneficiaryDoc = await db.collection("users").doc(beneficiaryId).get();
+    const fcmToken = beneficiaryDoc.data()?.fcmToken as string | undefined;
+    if (!fcmToken) return;
+
+    await sendPush(
+      fcmToken,
+      "Request Accepted! 🎉",
+      `${donorName} has accepted your request: "${requestTitle}"`,
+      {
+        type: "request_accepted",
+        requestId: event.params.requestId,
+      }
+    );
+
+    console.log(`Acceptance notification sent to beneficiary ${beneficiaryId}.`);
+  }
+);

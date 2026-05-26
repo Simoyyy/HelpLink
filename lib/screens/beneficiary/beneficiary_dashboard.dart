@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +30,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
       'assets/images/thank-you-note-for-donation-examples.jpg';
 
   VoidCallback? _closeChat;
+  StreamSubscription<RemoteMessage>? _fcmSub;
 
   // 0 = all time, otherwise number of days
   int _filterDays = 0;
@@ -63,7 +66,39 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
       precacheImage(
           ResizeImage(const AssetImage(_bgAsset), width: 800), context);
       _loadStats();
+      _fcmSub = FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     }
+  }
+
+  void _onForegroundMessage(RemoteMessage message) {
+    if (!mounted) return;
+    if (message.data['type'] != 'request_accepted') return;
+    final notification = message.notification;
+    final donorName = message.data['donorName'] as String?;
+    final body = notification?.body ??
+        (donorName != null
+            ? '$donorName has accepted your request.'
+            : 'A donor has accepted your request!');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: Colors.white, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(body,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 5),
+      ),
+    );
   }
 
   Widget _buildStatsSection() {
@@ -172,6 +207,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   @override
   void dispose() {
     _closeChat?.call();
+    _fcmSub?.cancel();
     super.dispose();
   }
 
