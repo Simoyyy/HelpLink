@@ -188,6 +188,22 @@ class FirestoreService {
     }
   }
 
+  /// One-time fetch of pending emergency requests (for nearby donor alert).
+  Future<List<HelpRequest>> getEmergencyRequestsOnce() async {
+    try {
+      final snapshot = await _firestore
+          .collection(AppConstants.helpRequestsCollection)
+          .where('isEmergency', isEqualTo: true)
+          .where('status', isEqualTo: RequestStatus.pending.name)
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .get();
+      return snapshot.docs.map((d) => HelpRequest.fromFirestore(d)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// One-time fetch of categories donor has previously helped with
   Future<List<String>> getDonorHistoryCategories(String donorId) async {
     try {

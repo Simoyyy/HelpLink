@@ -11,7 +11,8 @@ import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 
 class NewRequestScreen extends StatefulWidget {
-  const NewRequestScreen({super.key});
+  final bool isEmergency;
+  const NewRequestScreen({super.key, this.isEmergency = false});
 
   @override
   State<NewRequestScreen> createState() => _NewRequestScreenState();
@@ -228,6 +229,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
       latitude: _selectedLat,
       longitude: _selectedLng,
       isAnonymous: _isAnonymous,
+      isEmergency: widget.isEmergency,
       createdAt: DateTime.now(),
     );
 
@@ -264,19 +266,20 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
       backgroundColor: AppTheme.backgroundGrey,
       body: Column(
         children: [
-          // ── Purple gradient header ────────────────────────────────────────
+          // ── Header (red for emergency, purple otherwise) ──────────────────
           Container(
             width: double.infinity,
-            padding:
-                EdgeInsets.fromLTRB(16, topPad + 10, 16, 20),
-            decoration: const BoxDecoration(
+            padding: EdgeInsets.fromLTRB(16, topPad + 10, 16, 20),
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.beneficiaryGradientStart,
-                  AppTheme.beneficiaryGradientEnd,
-                ],
+                colors: widget.isEmergency
+                    ? const [Color(0xFFD32F2F), Color(0xFFB71C1C)]
+                    : const [
+                        AppTheme.beneficiaryGradientStart,
+                        AppTheme.beneficiaryGradientEnd,
+                      ],
               ),
             ),
             child: Row(
@@ -286,22 +289,30 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                   child: const Icon(Icons.arrow_back,
                       color: Colors.white, size: 24),
                 ),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (widget.isEmergency)
+                        const Icon(Icons.crisis_alert_rounded,
+                            color: Colors.white, size: 28),
                       Text(
-                        'Create Help Request',
+                        widget.isEmergency
+                            ? 'Emergency Request'
+                            : 'Create Help Request',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Colors.white),
                       ),
                       Text(
-                        'Tell us what assistance you need',
+                        widget.isEmergency
+                            ? 'Your request will be flagged as urgent'
+                            : 'Tell us what assistance you need',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: Colors.white70),
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.white70),
                       ),
                     ],
                   ),
@@ -320,6 +331,38 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Emergency badge
+                    if (widget.isEmergency)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppTheme.errorRed.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.crisis_alert_rounded,
+                                color: AppTheme.errorRed, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'This is an emergency request. Nearby donors will be alerted immediately.',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppTheme.errorRed,
+                                    fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    if (widget.isEmergency) const SizedBox(height: 16),
+
                     // Label 1 – Weekly request limit warning
                     _buildWeeklyLimitBanner(),
 
@@ -437,7 +480,9 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _submitRequest,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryPurple,
+                          backgroundColor: widget.isEmergency
+                              ? AppTheme.errorRed
+                              : AppTheme.primaryPurple,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14)),
                         ),
@@ -446,8 +491,10 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                                 height: 24,
                                 width: 24,
                                 child: Lottie.asset('assets/lottie/loading.json', fit: BoxFit.contain))
-                            : const Text(
-                                'Submit Request',
+                            : Text(
+                                widget.isEmergency
+                                    ? 'Submit Emergency Request'
+                                    : 'Submit Request',
                                 style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

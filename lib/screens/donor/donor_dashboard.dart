@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +37,7 @@ class _DonorDashboardState extends State<DonorDashboard> {
   Future<Map<String, int>>? _statsFuture;
 
   VoidCallback? _closeChat;
+  final _shownEmergencyIds = <String>{};
 
   @override
   void dispose() {
@@ -56,6 +58,36 @@ class _DonorDashboardState extends State<DonorDashboard> {
       _loadRecommendations();
       _loadStats();
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkVerification());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkEmergencyRequests());
+    }
+  }
+
+  Future<void> _checkEmergencyRequests() async {
+    if (!mounted) return;
+    final user = Provider.of<AuthService>(context, listen: false).userModel;
+    if (user == null || user.latitude == null || user.longitude == null) return;
+
+    final fs = Provider.of<FirestoreService>(context, listen: false);
+    final requests = await fs.getEmergencyRequestsOnce();
+
+    final nearby = requests.where((r) {
+      if (r.latitude == null || r.longitude == null) return false;
+      if (r.beneficiaryId == user.uid) return false;
+      final dist = Geolocator.distanceBetween(
+          user.latitude!, user.longitude!, r.latitude!, r.longitude!);
+      return dist <= 5000;
+    }).toList();
+
+    for (final req in nearby) {
+      if (!mounted) return;
+      if (_shownEmergencyIds.contains(req.id)) continue;
+      _shownEmergencyIds.add(req.id);
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _EmergencyRequestPrompt(request: req),
+      );
+      break;
     }
   }
 
@@ -851,19 +883,49 @@ class _DonorDashboardState extends State<DonorDashboard> {
 
   Widget _buildRequestCard(HelpRequest request) {
     final dateStr = DateFormat('MMM d, yyyy').format(request.createdAt);
+    final isEmergency = request.isEmergency;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: isEmergency ? const Color(0xFFFFF5F5) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0))),
+          border: Border.all(
+            color: isEmergency
+                ? AppTheme.errorRed.withValues(alpha: 0.5)
+                : const Color(0xFFE2E8F0),
+            width: isEmergency ? 1.5 : 1,
+          )),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(request.title,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textDark)),
+        Row(children: [
+          if (isEmergency) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                  color: AppTheme.errorRed,
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.crisis_alert_rounded,
+                    size: 12, color: Colors.white),
+                SizedBox(width: 4),
+                Text('SOS',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+              ]),
+            ),
+          ],
+          Expanded(
+            child: Text(request.title,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark)),
+          ),
+        ]),
         const SizedBox(height: 4),
         Text(request.description,
             style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
@@ -910,14 +972,14 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 MaterialPageRoute(
                     builder: (_) => RequestDetailScreen(request: request))),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryBlue,
+                backgroundColor:
+                    isEmergency ? AppTheme.errorRed : AppTheme.primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
             child: const Text('View Details',
-                style:
-                    TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ),
         ),
       ]),
@@ -1364,6 +1426,214 @@ class _VerificationPromptSheet extends StatelessWidget {
                 style: TextStyle(color: AppTheme.textMuted)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Emergency request prompt ──────────────────────────────────────────────────
+
+class _EmergencyRequestPrompt extends StatelessWidget {
+  final HelpRequest request;
+  const _EmergencyRequestPrompt({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFD32F2F), Color(0xFFB71C1C)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close,
+                          color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // Icon
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.crisis_alert_rounded,
+                    color: Colors.white, size: 48),
+              ),
+              const SizedBox(height: 20),
+
+              const Text(
+                'Emergency Nearby!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Someone urgently needs assistance in your area.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, color: Colors.white70),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Request details card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.title,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        request.description,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.white70),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (request.location != null &&
+                          request.location!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          const Icon(Icons.location_on_outlined,
+                              size: 15, color: Colors.white70),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(request.location!,
+                                style: const TextStyle(
+                                    fontSize: 13, color: Colors.white70)),
+                          ),
+                        ]),
+                      ],
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.person_outline,
+                            size: 15, color: Colors.white70),
+                        const SizedBox(width: 6),
+                        Text(request.displayName,
+                            style: const TextStyle(
+                                fontSize: 13, color: Colors.white70)),
+                      ]),
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.category_outlined,
+                            size: 15, color: Colors.white70),
+                        const SizedBox(width: 6),
+                        Text(request.categoryLabel,
+                            style: const TextStyle(
+                                fontSize: 13, color: Colors.white70)),
+                      ]),
+                    ],
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // Buttons
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  RequestDetailScreen(request: request),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFFD32F2F),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                        child: const Text('View & Respond',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side:
+                              const BorderSide(color: Colors.white54),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Close',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

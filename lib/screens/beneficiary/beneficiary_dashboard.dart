@@ -628,7 +628,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                       onGetHelp: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const NewRequestScreen()),
+                            builder: (_) =>
+                                const NewRequestScreen(isEmergency: true)),
                       ),
                     ),
                     child: Container(
