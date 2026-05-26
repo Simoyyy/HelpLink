@@ -1100,12 +1100,17 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: request.isEmergency
+              ? const Color(0xFFFFEBEE)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: request.status == RequestStatus.matched
-                ? AppTheme.successGreen.withValues(alpha: 0.3)
-                : const Color(0xFFE2E8F0),
+            color: request.isEmergency
+                ? const Color(0xFFD32F2F).withValues(alpha: 0.5)
+                : request.status == RequestStatus.matched
+                    ? AppTheme.successGreen.withValues(alpha: 0.3)
+                    : const Color(0xFFE2E8F0),
+            width: request.isEmergency ? 1.5 : 1.0,
           ),
         ),
         child: Column(
@@ -1115,12 +1120,23 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    request.title,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textDark),
+                  child: Row(
+                    children: [
+                      if (request.isEmergency) ...[
+                        const Icon(Icons.crisis_alert_rounded,
+                            size: 16, color: Color(0xFFD32F2F)),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          request.title,
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textDark),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 _buildStatusBadge(request.status),
