@@ -926,8 +926,6 @@ class _DonorDashboardState extends State<DonorDashboard> {
   Widget _buildRequestCard(HelpRequest request) {
     final dateStr = DateFormat('MMM d, yyyy').format(request.createdAt);
     final isEmergency = request.isEmergency;
-    final isTaken = request.status == RequestStatus.matched ||
-        request.status == RequestStatus.active;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -937,10 +935,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
           border: Border.all(
             color: isEmergency
                 ? AppTheme.errorRed.withValues(alpha: 0.5)
-                : isTaken
-                    ? AppTheme.successGreen.withValues(alpha: 0.4)
-                    : const Color(0xFFE2E8F0),
-            width: isEmergency || isTaken ? 1.5 : 1,
+                : const Color(0xFFE2E8F0),
+            width: isEmergency ? 1.5 : 1,
           )),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -961,27 +957,6 @@ class _DonorDashboardState extends State<DonorDashboard> {
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
-              ]),
-            ),
-          ],
-          if (isTaken) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: AppTheme.successGreen.withValues(alpha: 0.4))),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.volunteer_activism_rounded,
-                    size: 12, color: AppTheme.successGreen),
-                const SizedBox(width: 4),
-                Text('Being Helped',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.successGreen)),
               ]),
             ),
           ],
@@ -1039,25 +1014,14 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 MaterialPageRoute(
                     builder: (_) => RequestDetailScreen(request: request))),
             style: ElevatedButton.styleFrom(
-                backgroundColor: isTaken
-                    ? AppTheme.successGreen.withValues(alpha: 0.15)
-                    : isEmergency
-                        ? AppTheme.errorRed
-                        : AppTheme.primaryBlue,
-                foregroundColor:
-                    isTaken ? AppTheme.successGreen : Colors.white,
+                backgroundColor:
+                    isEmergency ? AppTheme.errorRed : AppTheme.primaryBlue,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                elevation: isTaken ? 0 : null,
-                side: isTaken
-                    ? BorderSide(
-                        color: AppTheme.successGreen.withValues(alpha: 0.4))
-                    : null,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            child: Text(
-                isTaken ? 'Being Helped — View Details' : 'View Details',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
+            child: const Text('View Details',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ),
         ),
       ]),
