@@ -590,6 +590,25 @@ class FirestoreService {
     }
   }
 
+  /// Upload a voice note to Firebase Storage and return the download URL.
+  Future<String?> uploadVoiceNote({
+    required String requestId,
+    required File file,
+  }) async {
+    try {
+      final name = '${DateTime.now().millisecondsSinceEpoch}.wav';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('voice_notes')
+          .child(requestId)
+          .child(name);
+      await ref.putFile(file, SettableMetadata(contentType: 'audio/wav'));
+      return await ref.getDownloadURL();
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Upload a delivery proof photo to Firebase Storage.
   Future<String?> uploadCompletionPhoto({
     required String requestId,

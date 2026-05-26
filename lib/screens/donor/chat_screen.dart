@@ -16,7 +16,7 @@ import 'package:helplink/utils/beneficiary_profile.dart';
 import 'package:helplink/screens/location_view_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:record/record.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -43,7 +43,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
-  bool _isTranscribing = false;
+  bool _isUploadingVoice = false;
   bool _isLocked = false;
   int _lastMessageCount = 0;
   int _recordingSeconds = 0;
@@ -56,8 +56,12 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _liveLocationTimer;
   bool _isSharingLive = false;
 
-  static String get _geminiApiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
-  static String get _mapsApiKey   => dotenv.env['MAPS_API_KEY'] ?? '';
+  static String get _mapsApiKey => dotenv.env['MAPS_API_KEY'] ?? '';
+
+  // Audio playback
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _playingMessageId;
+  bool _isAudioPlaying = false;
 
   String _staticMapUrl(double lat, double lng, {bool isLive = false}) {
     final color = isLive ? '0xFF8800' : 'red';
@@ -111,13 +115,32 @@ class _ChatScreenState extends State<ChatScreen> {
       _activeLiveSessionId = null;
     }
     _recordingTimer?.cancel();
+    _audioPlayer.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _recorder.dispose();
     super.dispose();
   }
 
-  // ── Audio ──────────────────────────────────────────────────────────────────
+  // ── Audio playback ─────────────────────────────────────────────────────────
+
+  Future<void> _toggleAudio(ChatMessage msg) async {
+    if (_playingMessageId == msg.id && _isAudioPlaying) {
+      await _audioPlayer.pause();
+      if (mounted) setState(() => _isAudioPlaying = false);
+    } else {
+      if (_playingMessageId != msg.id) {
+        await _audioPlayer.setSourceUrl(msg.audioUrl!);
+      }
+      await _audioPlayer.resume();
+      if (mounted) setState(() { _playingMessageId = msg.id; _isAudioPlaying = true; });
+      _audioPlayer.onPlayerComplete.listen((_) {
+        if (mounted) setState(() => _isAudioPlaying = false);
+      });
+    }
+  }
+
+  // ── Recording ──────────────────────────────────────────────────────────────
 
   void _startRecordingTimer() {
     _recordingSeconds = 0;
@@ -156,49 +179,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputCenter() {
-    if (_isLocked) {
-      // Locked state: show delete button on left, timer in center
-      return Row(
-        children: [
-          GestureDetector(
-            onTap: _cancelRecording,
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: Colors.red.shade100, shape: BoxShape.circle),
-              child: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PulsingDot(),
-                  const SizedBox(width: 8),
-                  Text(_recordingDuration,
-                      style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 15)),
-                  const SizedBox(width: 8),
-                  Icon(Icons.lock, color: Colors.red.shade400, size: 14),
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
     if (_isRecording) {
-      // Sliding state: pulsing dot + timer + "slide to cancel" that drifts left
+      // Pressing state: show "slide left to cancel" indicator that drifts with finger
       final slideProgress = (_currentDragOffset.dx.clamp(-100.0, 0.0) / -100.0);
       final cancelOpacity = (1.0 - slideProgress).clamp(0.3, 1.0);
-      final lockOpacity = (1.0 - slideProgress * 2).clamp(0.0, 1.0);
       return Stack(
         alignment: Alignment.centerLeft,
         children: [
@@ -211,23 +195,14 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                _PulsingDot(),
+                const _PulsingDot(),
                 const SizedBox(width: 6),
                 Text(_recordingDuration,
                     style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 14)),
-                const Spacer(),
-                // Lock icon floats upward as user drags up
-                Transform.translate(
-                  offset: Offset(0, (_currentDragOffset.dy.clamp(-60.0, 0.0))),
-                  child: Opacity(
-                    opacity: lockOpacity,
-                    child: Icon(Icons.lock_outline, color: Colors.red.shade300, size: 18),
-                  ),
-                ),
               ],
             ),
           ),
-          // "slide to cancel" drifts with drag
+          // "slide to cancel" label drifts left with drag
           Positioned.fill(
             child: IgnorePointer(
               child: Align(
@@ -261,7 +236,7 @@ class _ChatScreenState extends State<ChatScreen> {
       keyboardType: TextInputType.multiline,
       textInputAction: TextInputAction.newline,
       decoration: InputDecoration(
-        hintText: _isTranscribing ? 'Transcribing…' : 'Type a message…',
+        hintText: _isUploadingVoice ? 'Sending voice note…' : 'Type a message…',
         filled: true,
         fillColor: AppTheme.backgroundGrey,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -286,9 +261,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path != null) try { await File(path).delete(); } catch (_) {}
   }
 
-  Future<void> _stopAndTranscribe() async {
+  Future<void> _stopAndSendVoice() async {
     final path = await _recorder.stop();
     _stopRecordingTimer();
+    final duration = _recordingDuration;
     if (mounted) {
       setState(() {
         _isRecording = false;
@@ -298,28 +274,40 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (path == null) return;
 
-    setState(() => _isTranscribing = true);
+    if (mounted) setState(() => _isUploadingVoice = true);
     try {
-      final bytes = await File(path).readAsBytes();
-      final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: _geminiApiKey);
-      final response = await model.generateContent([
-        Content.multi([
-          DataPart('audio/wav', bytes),
-          TextPart('Transcribe this audio exactly as spoken. Return only the transcribed text, nothing else.'),
-        ]),
-      ]);
-      final transcribed = response.text?.trim() ?? '';
-      if (transcribed.isNotEmpty && mounted) {
-        _messageController.text = transcribed;
-      }
+      final url = await _firestoreService.uploadVoiceNote(
+        requestId: widget.request.id,
+        file: File(path),
+      );
+      if (url == null) throw Exception('Upload failed');
+      if (!mounted) return;
+
+      final receiverId = _isDonor
+          ? widget.request.beneficiaryId
+          : widget.request.donorId ?? '';
+      final message = ChatMessage(
+        id: '',
+        senderId: widget.currentUserId,
+        senderName: widget.currentUserName,
+        receiverId: receiverId,
+        requestId: widget.request.id,
+        content: duration,
+        timestamp: DateTime.now(),
+        messageType: MessageType.audio,
+        audioUrl: url,
+      );
+      await _firestoreService.sendMessage(message);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Transcription failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Failed to send voice note: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) setState(() => _isTranscribing = false);
+      if (mounted) setState(() => _isUploadingVoice = false);
       try { await File(path).delete(); } catch (_) {}
     }
   }
@@ -695,6 +683,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final msg = messages[index];
                     final isMe = msg.senderId == widget.currentUserId;
+                    if (msg.messageType == MessageType.audio) {
+                      return _buildAudioBubble(msg, isMe);
+                    }
                     if (msg.messageType != MessageType.text) {
                       return _buildLocationBubble(msg, isMe);
                     }
@@ -744,7 +735,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 // [2] Mic button — always in tree at fixed position (Listener needs stable position)
                 Listener(
                   onPointerDown: (event) {
-                    if (_isRecording || _isTranscribing) return;
+                    if (_isRecording || _isUploadingVoice) return;
                     _recordingStartOffset = event.position;
                     _currentDragOffset = Offset.zero;
                     setState(() {
@@ -759,26 +750,25 @@ class _ChatScreenState extends State<ChatScreen> {
                     final delta = event.position - _recordingStartOffset;
                     setState(() => _currentDragOffset = delta);
                     if (delta.dx < -100) {
-                      _cancelRecording();
-                    } else if (delta.dy < -60) {
                       setState(() => _isLocked = true);
+                      _cancelRecording();
                     }
                   },
                   onPointerUp: (_) {
                     if (!_isRecording || _isLocked) return;
-                    _stopAndTranscribe();
+                    _stopAndSendVoice();
                   },
                   child: Container(
                     width: 44, height: 44,
                     decoration: BoxDecoration(
                       color: _isRecording
                           ? Colors.red
-                          : _isTranscribing
+                          : _isUploadingVoice
                               ? Colors.orange.shade100
                               : Colors.grey.shade200,
                       shape: BoxShape.circle,
                     ),
-                    child: _isTranscribing
+                    child: _isUploadingVoice
                         ? Lottie.asset('assets/lottie/loading.json', width: 44, height: 44, fit: BoxFit.contain)
                         : Icon(
                             Icons.mic,
@@ -788,18 +778,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // [3] Send button — hidden while recording (unless locked)
+                // [3] Send button — hidden while recording
                 Opacity(
-                  opacity: (_isRecording && !_isLocked) ? 0.0 : 1.0,
+                  opacity: _isRecording ? 0.0 : 1.0,
                   child: IgnorePointer(
-                    ignoring: _isRecording && !_isLocked,
+                    ignoring: _isRecording,
                     child: Container(
                       decoration: BoxDecoration(
                         color: AppTheme.primaryBlue,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: IconButton(
-                        onPressed: _isLocked ? _stopAndTranscribe : _sendMessage,
+                        onPressed: _sendMessage,
                         icon: const Icon(Icons.send_rounded),
                         color: Colors.white,
                         iconSize: 22,
@@ -872,6 +862,88 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioBubble(ChatMessage message, bool isMe) {
+    final isPlaying = _playingMessageId == message.id && _isAudioPlaying;
+    final senderName = isMe ? 'Yourself' : message.senderName;
+    final senderRole = isMe ? _currentUserRole : _otherUserRole;
+    final bubbleColor = isMe
+        ? (_isDonor ? AppTheme.primaryBlue : AppTheme.primaryPurple)
+        : (_isDonor ? AppTheme.primaryPurple : AppTheme.primaryBlue);
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(senderName,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 6),
+                  _buildInlineRoleBadge(senderRole),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isMe ? 16 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 16),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => _toggleAudio(message),
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.graphic_eq, color: Colors.white70, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    message.content,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                DateFormat('h:mm a').format(message.timestamp),
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
             ),
           ],

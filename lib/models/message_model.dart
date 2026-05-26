@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum MessageType { text, location, liveLocation }
+enum MessageType { text, location, liveLocation, audio }
 
 class ChatMessage {
   final String id;
@@ -17,6 +17,7 @@ class ChatMessage {
   final String? locationName;
   final String? liveLocationSessionId;
   final DateTime? liveLocationExpiry;
+  final String? audioUrl;
 
   ChatMessage({
     required this.id,
@@ -33,6 +34,7 @@ class ChatMessage {
     this.locationName,
     this.liveLocationSessionId,
     this.liveLocationExpiry,
+    this.audioUrl,
   });
 
   factory ChatMessage.fromFirestore(DocumentSnapshot doc) {
@@ -41,6 +43,7 @@ class ChatMessage {
     final typeStr = data['messageType'] as String?;
     if (typeStr == 'location') type = MessageType.location;
     if (typeStr == 'liveLocation') type = MessageType.liveLocation;
+    if (typeStr == 'audio') type = MessageType.audio;
 
     return ChatMessage(
       id: doc.id,
@@ -58,6 +61,7 @@ class ChatMessage {
       liveLocationSessionId: data['liveLocationSessionId'] as String?,
       liveLocationExpiry:
           (data['liveLocationExpiry'] as Timestamp?)?.toDate(),
+      audioUrl: data['audioUrl'] as String?,
     );
   }
 
@@ -81,6 +85,7 @@ class ChatMessage {
     if (liveLocationExpiry != null) {
       map['liveLocationExpiry'] = Timestamp.fromDate(liveLocationExpiry!);
     }
+    if (audioUrl != null) map['audioUrl'] = audioUrl;
     return map;
   }
 }
