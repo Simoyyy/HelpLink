@@ -473,84 +473,97 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   ],
                   const SizedBox(height: 20),
 
-                  // Title
-                  Text(
-                    _currentRequest.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
+                  // Main details card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentRequest.title,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(color: Color(0xFFE2E8F0)),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(
+                          Icons.sell_outlined,
+                          'Category',
+                          _currentRequest.categoryLabel,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(
+                          Icons.person_outline,
+                          'Requested by',
+                          _currentRequest.displayName,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(
+                          Icons.calendar_today_outlined,
+                          'Date Posted',
+                          DateFormat('M/d/yyyy').format(_currentRequest.createdAt),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(
+                          Icons.location_on_outlined,
+                          'Location',
+                          _currentRequest.location ?? 'Not specified',
+                        ),
+                        if (_currentRequest.latitude != null &&
+                            _currentRequest.longitude != null) ...[
+                          const SizedBox(height: 12),
+                          LocationMapPreview(
+                            latitude: _currentRequest.latitude!,
+                            longitude: _currentRequest.longitude!,
+                            label: _currentRequest.location,
+                          ),
+                        ],
+                        if (_currentRequest.donorName != null) ...[
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            Icons.volunteer_activism,
+                            'Donor',
+                            _currentRequest.donorName!,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        const Divider(color: Color(0xFFE2E8F0)),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Description',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _currentRequest.description,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textMuted,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Info rows
-                  _buildInfoRow(
-                    Icons.sell_outlined,
-                    'Category',
-                    _currentRequest.categoryLabel,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow(
-                    Icons.person_outline,
-                    'Requested by',
-                    _currentRequest.displayName,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow(
-                    Icons.calendar_today_outlined,
-                    'Date Posted',
-                    DateFormat('M/d/yyyy').format(_currentRequest.createdAt),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow(
-                    Icons.location_on_outlined,
-                    'Location',
-                    _currentRequest.location ?? 'Not specified',
-                  ),
-                  if (_currentRequest.latitude != null &&
-                      _currentRequest.longitude != null) ...[
-                    const SizedBox(height: 12),
-                    LocationMapPreview(
-                      latitude: _currentRequest.latitude!,
-                      longitude: _currentRequest.longitude!,
-                      label: _currentRequest.location,
-                    ),
-                  ],
-                  if (_currentRequest.donorName != null) ...[
-                    const SizedBox(height: 16),
-                    _buildInfoRow(
-                      Icons.volunteer_activism,
-                      'Donor',
-                      _currentRequest.donorName!,
-                    ),
-                  ],
 
                   const SizedBox(height: 16),
                   BeneficiaryProfileCard(
                     beneficiaryId: _currentRequest.beneficiaryId,
                     showVerification: !_currentRequest.isAnonymous,
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Description
-                  const Text(
-                    'Description',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _currentRequest.description,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: AppTheme.textMuted,
-                      height: 1.5,
-                    ),
                   ),
 
                   // Feedback card (completed + feedback given)
