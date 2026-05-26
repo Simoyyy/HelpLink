@@ -28,6 +28,7 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
   static String get _mapsKey => dotenv.env['MAPS_API_KEY'] ?? '';
 
   GoogleMapController? _controller;
+  final _mapReady = Completer<GoogleMapController>();
   LatLng? _picked;
   Set<Marker> _markers = {};
   String _address = '';
@@ -65,6 +66,11 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
     _searchFocus.dispose();
     _controller?.dispose();
     super.dispose();
+  }
+
+  Future<void> _moveToLocation(LatLng pos, {double zoom = 15.0}) async {
+    final ctrl = await _mapReady.future;
+    await ctrl.animateCamera(CameraUpdate.newLatLngZoom(pos, zoom));
   }
 
   // ── Search / autocomplete ─────────────────────────────────────────────────
@@ -135,7 +141,7 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
         final addr = (data['result']?['formatted_address'] as String?) ?? description;
         if (loc != null) {
           final pos = LatLng((loc['lat'] as num).toDouble(), (loc['lng'] as num).toDouble());
-          _controller?.animateCamera(CameraUpdate.newLatLngZoom(pos, 15));
+          _moveToLocation(pos);
           setState(() {
             _picked = pos;
             _markers = {Marker(markerId: const MarkerId('picked'), position: pos)};
@@ -150,13 +156,70 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
         final locs = await locationFromAddress(description);
         if (!mounted || locs.isEmpty) return;
         final pos = LatLng(locs.first.latitude, locs.first.longitude);
-        _controller?.animateCamera(CameraUpdate.newLatLngZoom(pos, 15));
+        _moveToLocation(pos);
         setState(() {
           _picked = pos;
           _markers = {Marker(markerId: const MarkerId('picked'), position: pos)};
           _address = description;
         });
       } catch (_) {}
+    } finally {
+      if (mounted) setState(() => _isGeocoding = false);
+    }
+  }
+
+  // ── Direct geocode (used when user submits text without selecting suggestion) ─
+
+  Future<void> _searchAndMove(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    _searchFocus.unfocus();
+    setState(() { _isGeocoding = true; _suggestions = []; });
+    try {
+      if (_mapsKey.isNotEmpty) {
+        final uri = Uri.parse(
+          'https://maps.googleapis.com/maps/api/geocode/json'
+          '?address=${Uri.encodeComponent(q)}&key=$_mapsKey',
+        );
+        final res = await http.get(uri);
+        if (!mounted) return;
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final results = (data['results'] as List?) ?? [];
+          if (results.isNotEmpty) {
+            final loc = results[0]['geometry']['location'];
+            final addr = (results[0]['formatted_address'] as String?) ?? q;
+            final pos = LatLng(
+              (loc['lat'] as num).toDouble(),
+              (loc['lng'] as num).toDouble(),
+            );
+            await _moveToLocation(pos);
+            if (mounted) {
+              setState(() {
+                _picked = pos;
+                _markers = {Marker(markerId: const MarkerId('picked'), position: pos)};
+                _address = addr;
+                _searchController.text = addr;
+              });
+            }
+            return;
+          }
+        }
+      }
+      // Fallback: geocoding package
+      final locs = await locationFromAddress(q);
+      if (!mounted || locs.isEmpty) return;
+      final pos = LatLng(locs.first.latitude, locs.first.longitude);
+      await _moveToLocation(pos);
+      if (mounted) {
+        setState(() {
+          _picked = pos;
+          _markers = {Marker(markerId: const MarkerId('picked'), position: pos)};
+          _address = q;
+          _searchController.text = q;
+        });
+      }
+    } catch (_) {
     } finally {
       if (mounted) setState(() => _isGeocoding = false);
     }
@@ -173,6 +236,7 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
       _isGeocoding = true;
       _suggestions = [];
     });
+    _moveToLocation(pos);
     await _geocode(pos);
   }
 
@@ -218,11 +282,14 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
               target: initial,
               zoom: widget.initialPosition != null ? 15 : 11,
             ),
-            onMapCreated: (c) => _controller = c,
+            onMapCreated: (c) {
+              _controller = c;
+              if (!_mapReady.isCompleted) _mapReady.complete(c);
+            },
             markers: _markers,
             onTap: _onTap,
             myLocationButtonEnabled: false,
-            zoomControlsEnabled: true,
+            zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             scrollGesturesEnabled: true,
             zoomGesturesEnabled: true,
@@ -273,6 +340,8 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
                                     onSubmitted: (v) {
                                       if (_suggestions.isNotEmpty) {
                                         _selectSuggestion(_suggestions.first);
+                                      } else {
+                                        _searchAndMove(v);
                                       }
                                     },
                                     style: const TextStyle(fontSize: 13),
@@ -386,6 +455,31 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
             ),
           ),
 
+          // Zoom controls — positioned above the confirm button
+          Positioned(
+            right: 12,
+            bottom: 104,
+            child: Column(
+              children: [
+                _ZoomBtn(
+                  icon: Icons.add,
+                  onPressed: () async {
+                    final ctrl = await _mapReady.future;
+                    ctrl.animateCamera(CameraUpdate.zoomIn());
+                  },
+                ),
+                const SizedBox(height: 4),
+                _ZoomBtn(
+                  icon: Icons.remove,
+                  onPressed: () async {
+                    final ctrl = await _mapReady.future;
+                    ctrl.animateCamera(CameraUpdate.zoomOut());
+                  },
+                ),
+              ],
+            ),
+          ),
+
           // Bottom confirm button
           Positioned(
             bottom: 32,
@@ -440,6 +534,30 @@ class _FullScreenMapPickerState extends State<FullScreenMapPicker> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ZoomBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  const _ZoomBtn({required this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 22, color: Colors.black87),
+        ),
       ),
     );
   }

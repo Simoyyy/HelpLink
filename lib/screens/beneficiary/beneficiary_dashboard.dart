@@ -14,6 +14,7 @@ import 'package:helplink/screens/donor/chat_screen.dart';
 import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/widgets/report_bottom_sheet.dart';
+import 'package:helplink/widgets/emergency_contacts_sheet.dart';
 
 class BeneficiaryDashboard extends StatefulWidget {
   const BeneficiaryDashboard({super.key});
@@ -621,44 +622,15 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: GestureDetector(
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Row(
-                            children: [
-                              Icon(Icons.crisis_alert_rounded,
-                                  color: AppTheme.errorRed),
-                              SizedBox(width: 8),
-                              Text('Emergency Assistance'),
-                            ],
-                          ),
-                          content: const Text(
-                            'This will connect you with emergency assistance services immediately. '
-                            'Use this only for urgent situations such as disaster relief.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.errorRed),
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const NewRequestScreen()),
-                                );
-                              },
-                              child: const Text('Get Help Now'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                    onTap: () => showEmergencyContactsSheet(
+                      context,
+                      userLocation: user.location,
+                      onGetHelp: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NewRequestScreen()),
+                      ),
+                    ),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(

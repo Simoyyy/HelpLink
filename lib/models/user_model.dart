@@ -18,6 +18,8 @@ class UserModel {
   final bool isICVerified;
   final DateTime? icVerifiedAt;
 
+  final bool icPendingVerification;
+
   // Donor moderation
   final int cancellationStrikes;
   final DateTime? strikeWindowStart;
@@ -38,6 +40,7 @@ class UserModel {
     this.phoneNumber,
     this.isICVerified = false,
     this.icVerifiedAt,
+    this.icPendingVerification = false,
     this.cancellationStrikes = 0,
     this.strikeWindowStart,
     this.banUntil,
@@ -68,6 +71,7 @@ class UserModel {
       phoneNumber: data['phoneNumber'],
       isICVerified: data['isICVerified'] == true,
       icVerifiedAt: (data['icVerifiedAt'] as Timestamp?)?.toDate(),
+      icPendingVerification: data['icPendingVerification'] == true,
       cancellationStrikes: (data['cancellationStrikes'] as int?) ?? 0,
       strikeWindowStart: (data['strikeWindowStart'] as Timestamp?)?.toDate(),
       banUntil: (data['banUntil'] as Timestamp?)?.toDate(),
@@ -90,6 +94,7 @@ class UserModel {
       'isICVerified': isICVerified,
       'icVerifiedAt':
           icVerifiedAt != null ? Timestamp.fromDate(icVerifiedAt!) : null,
+      'icPendingVerification': icPendingVerification,
       'cancellationStrikes': cancellationStrikes,
       'strikeWindowStart': strikeWindowStart != null
           ? Timestamp.fromDate(strikeWindowStart!)
@@ -111,6 +116,7 @@ class UserModel {
     String? phoneNumber,
     bool? isICVerified,
     DateTime? icVerifiedAt,
+    bool? icPendingVerification,
     int? cancellationStrikes,
     DateTime? strikeWindowStart,
     DateTime? banUntil,
@@ -130,6 +136,7 @@ class UserModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       isICVerified: isICVerified ?? this.isICVerified,
       icVerifiedAt: icVerifiedAt ?? this.icVerifiedAt,
+      icPendingVerification: icPendingVerification ?? this.icPendingVerification,
       cancellationStrikes: cancellationStrikes ?? this.cancellationStrikes,
       strikeWindowStart: strikeWindowStart ?? this.strikeWindowStart,
       banUntil: banUntil ?? this.banUntil,

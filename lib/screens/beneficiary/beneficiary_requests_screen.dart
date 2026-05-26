@@ -92,11 +92,21 @@ class _BeneficiaryRequestsScreenState
                     r.status == RequestStatus.completed &&
                     !r.beneficiaryFeedbackGiven;
 
+                // Ongoing = pending or in-progress only; cancelled/done go to history
+                bool isOngoing(HelpRequest r) =>
+                    r.status == RequestStatus.pending ||
+                    r.status == RequestStatus.matched ||
+                    r.status == RequestStatus.active ||
+                    r.status == RequestStatus.pendingConfirmation ||
+                    needsFeedback(r);
+
+                final ongoing = all.where(isOngoing).toList();
+
                 // Count for labels
-                final pendingCount = all
+                final pendingCount = ongoing
                     .where((r) => r.status == RequestStatus.pending)
                     .length;
-                final inProgressCount = all
+                final inProgressCount = ongoing
                     .where((r) =>
                         r.status == RequestStatus.matched ||
                         r.status == RequestStatus.active ||
@@ -108,12 +118,12 @@ class _BeneficiaryRequestsScreenState
                 List<HelpRequest> filtered;
                 switch (_activeFilter) {
                   case _Filter.pending:
-                    filtered = all
+                    filtered = ongoing
                         .where((r) => r.status == RequestStatus.pending)
                         .toList();
                     break;
                   case _Filter.inProgress:
-                    filtered = all
+                    filtered = ongoing
                         .where((r) =>
                             r.status == RequestStatus.matched ||
                             r.status == RequestStatus.active ||
@@ -122,12 +132,7 @@ class _BeneficiaryRequestsScreenState
                         .toList();
                     break;
                   case _Filter.all:
-                    // hide fully-done completed (feedback given) from ongoing view
-                    filtered = all
-                        .where((r) =>
-                            r.status != RequestStatus.completed ||
-                            !r.beneficiaryFeedbackGiven)
-                        .toList();
+                    filtered = ongoing;
                 }
 
                 return Column(
@@ -138,7 +143,7 @@ class _BeneficiaryRequestsScreenState
                       child: Row(
                         children: [
                           _FilterChip(
-                            label: 'All (${all.length})',
+                            label: 'All (${ongoing.length})',
                             active: _activeFilter == _Filter.all,
                             onTap: () =>
                                 setState(() => _activeFilter = _Filter.all),

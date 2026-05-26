@@ -626,7 +626,9 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                                         Icons.verified_user_rounded,
                                         user.isICVerified == true
                                             ? AppTheme.successGreen
-                                            : AppTheme.textMuted),
+                                            : user.icPendingVerification
+                                                ? AppTheme.primaryPurple
+                                                : AppTheme.textMuted),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Row(
@@ -640,16 +642,27 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                                               Text(
                                                 user.isICVerified == true
                                                     ? 'Verified ✓'
-                                                    : 'Not verified',
+                                                    : user.icPendingVerification
+                                                        ? 'Pending for Verification'
+                                                        : 'Not verified',
                                                 style: TextStyle(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,
-                                                  color: user.isICVerified ==
-                                                          true
+                                                  color: user.isICVerified == true
                                                       ? AppTheme.successGreen
-                                                      : AppTheme.warningOrange,
+                                                      : user.icPendingVerification
+                                                          ? AppTheme.primaryPurple
+                                                          : AppTheme.warningOrange,
                                                 ),
                                               ),
+                                              if (user.icPendingVerification &&
+                                                  user.isICVerified != true)
+                                                const Text(
+                                                  'Review takes 1–3 working days',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppTheme.textMuted),
+                                                ),
                                             ],
                                           ),
                                           if (user.isICVerified != true)
@@ -657,7 +670,11 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                                               onPressed: () =>
                                                   Navigator.pushNamed(context,
                                                       '/ic-verification'),
-                                              child: const Text('Verify Now'),
+                                              child: Text(
+                                                user.icPendingVerification
+                                                    ? 'Re-submit'
+                                                    : 'Verify Now',
+                                              ),
                                             ),
                                         ],
                                       ),

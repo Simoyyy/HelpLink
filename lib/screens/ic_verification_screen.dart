@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
@@ -9,7 +10,7 @@ import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 
-enum _Step { guide, preview, validating, success, failed }
+enum _Step { guide, preview, validating, uploading, pending, failed }
 
 class ICVerificationScreen extends StatefulWidget {
   const ICVerificationScreen({super.key});
@@ -19,8 +20,6 @@ class ICVerificationScreen extends StatefulWidget {
 }
 
 class _ICVerificationScreenState extends State<ICVerificationScreen> {
-  static const _apiKey = String.fromEnvironment('GEMINI_API_KEY');
-
   _Step _step = _Step.guide;
   File? _icImage;
   String _failReason = '';
@@ -37,70 +36,105 @@ class _ICVerificationScreenState extends State<ICVerificationScreen> {
     });
   }
 
-  Future<void> _verify() async {
-    if (_icImage == null) return;
-    setState(() => _step = _Step.validating);
+  Future<bool> _validateWithAI(File image) async {
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey.isEmpty) return true;
 
+    final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+    final bytes = await image.readAsBytes();
+
+    final prompt = TextPart(
+      'Examine this image carefully.\n'
+      'A valid Malaysian MyKad (National Identity Card) is a predominantly BLUE card and contains:\n'
+      '- A photo of the card holder\n'
+      '- A 12-digit IC number\n'
+      '- Text in Malay and English\n\n'
+      'Is this image clearly showing a blue Malaysian MyKad?\n'
+      'Respond ONLY with valid JSON (no markdown, no code blocks):\n'
+      '{"isValid": true, "reason": "brief reason"}\n'
+      'Set isValid=true ONLY if the image is clearly a blue Malaysian MyKad.',
+    );
+
+    final response = await model.generateContent([
+      Content.multi([prompt, DataPart('image/jpeg', bytes)]),
+    ]);
+
+    final text = (response.text ?? '').trim();
+    final cleaned = text
+        .replaceFirst(RegExp(r'^```json\s*'), '')
+        .replaceFirst(RegExp(r'\s*```$'), '')
+        .trim();
+
+    final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
+    return parsed['isValid'] == true;
+  }
+
+  Future<void> _submit() async {
+    if (_icImage == null) return;
     final auth = context.read<AuthService>();
     final firestore = context.read<FirestoreService>();
+    setState(() => _step = _Step.validating);
 
+    // AI gate — check image is a blue Malaysian IC before uploading
     try {
-      final bytes = await _icImage!.readAsBytes();
-      final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
-      final response = await model.generateContent([
-        Content.multi([
-          TextPart(
-            'You are a Malaysian IC (MyKad) verification system. '
-            'Analyse this image carefully. A valid Malaysian MyKad typically has: '
-            'a blue background, "MYKAD" or "MyKad" text, a 12-digit IC number in '
-            'XXXXXX-XX-XXXX format, a photo of the card holder, and the Malaysian '
-            'government crest or Jalur Gemilang. '
-            'Respond on the first line with exactly VALID or INVALID. '
-            'On the second line, give one brief reason.',
-          ),
-          DataPart('image/jpeg', bytes),
-        ]),
-      ]);
-
-      final text = response.text?.trim() ?? '';
-      final firstLine = text.split('\n').first.trim().toUpperCase();
-
-      if (firstLine == 'VALID') {
-        await firestore.updateUserProfile(
-          userId: auth.userModel!.uid,
-          data: {
-            'isICVerified': true,
-            'icVerifiedAt': FieldValue.serverTimestamp(),
-          },
-        );
-        await auth.loadUserData();
-        if (mounted) setState(() => _step = _Step.success);
-      } else {
-        final lines = text.split('\n');
-        setState(() {
-          _step = _Step.failed;
-          _failReason = lines.length > 1
-              ? lines[1].trim()
-              : 'The image does not appear to be a valid Malaysian MyKad.';
-        });
+      final isValid = await _validateWithAI(_icImage!);
+      if (!isValid) {
+        if (mounted) {
+          setState(() {
+            _step = _Step.failed;
+            _failReason =
+                'The photo does not appear to be a Malaysian IC (MyKad). '
+                'Please upload a clear photo of your blue IC card with all corners visible.';
+          });
+        }
+        return;
       }
     } catch (_) {
-      setState(() {
-        _step = _Step.failed;
-        _failReason = 'Verification service unavailable. Please try again.';
-      });
+      // If AI is unreachable, allow the upload so manual review can proceed
+    }
+
+    setState(() => _step = _Step.uploading);
+
+    try {
+      final uploaded = await firestore.uploadICPhoto(
+        userId: auth.userModel!.uid,
+        file: _icImage!,
+      );
+      if (!uploaded) throw Exception('Upload failed');
+
+      await firestore.updateUserProfile(
+        userId: auth.userModel!.uid,
+        data: {'icPendingVerification': true},
+      );
+      await auth.loadUserData();
+
+      if (mounted) setState(() => _step = _Step.pending);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _Step.failed;
+          _failReason =
+              'Failed to upload photo. Please check your connection and try again.';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Full-screen overlay steps — no AppBar
+    if (_step == _Step.pending) {
+      return Scaffold(
+        body: _PendingView(onClose: () => Navigator.pop(context)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: AppTheme.textDark,
-        automaticallyImplyLeading: _step != _Step.success,
         title: const Text('IC Verification',
             style: TextStyle(fontWeight: FontWeight.bold)),
       ),
@@ -114,11 +148,13 @@ class _ICVerificationScreenState extends State<ICVerificationScreen> {
         return _GuideView(onCapture: _pickImage);
       case _Step.preview:
         return _PreviewView(
-            image: _icImage!, onRetake: _pickImage, onSubmit: _verify);
+            image: _icImage!, onRetake: _pickImage, onSubmit: _submit);
       case _Step.validating:
         return const _ValidatingView();
-      case _Step.success:
-        return _SuccessView(onDone: () => Navigator.pop(context));
+      case _Step.uploading:
+        return const _UploadingView();
+      case _Step.pending:
+        return const SizedBox.shrink(); // handled in build()
       case _Step.failed:
         return _FailedView(
           reason: _failReason,
@@ -327,14 +363,14 @@ class _ValidatingView extends StatelessWidget {
           children: [
             Lottie.asset('assets/lottie/loading.json', width: 120, height: 120),
             const SizedBox(height: 16),
-            const Text('Analysing your IC…',
+            const Text('Checking your IC photo…',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textDark)),
             const SizedBox(height: 8),
             const Text(
-                'Our AI is verifying your identity card.\nThis may take a few seconds.',
+                'Our AI is verifying this is a valid Malaysian IC card.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: AppTheme.textMuted)),
           ],
@@ -344,11 +380,10 @@ class _ValidatingView extends StatelessWidget {
   }
 }
 
-// ─── Success ──────────────────────────────────────────────────────────────────
+// ─── Uploading ────────────────────────────────────────────────────────────────
 
-class _SuccessView extends StatelessWidget {
-  final VoidCallback onDone;
-  const _SuccessView({required this.onDone});
+class _UploadingView extends StatelessWidget {
+  const _UploadingView();
 
   @override
   Widget build(BuildContext context) {
@@ -358,34 +393,122 @@ class _SuccessView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Lottie.asset('assets/lottie/success.json',
-                width: 160, height: 160, repeat: false),
+            Lottie.asset('assets/lottie/loading.json', width: 120, height: 120),
             const SizedBox(height: 16),
-            const Text('Identity Verified!',
+            const Text('Uploading your photo…',
                 style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.successGreen)),
+                    color: AppTheme.textDark)),
             const SizedBox(height: 8),
             const Text(
-                'Your IC has been verified successfully.\nA verified badge has been added to your profile.',
+                'Please wait while we securely upload your IC photo.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: AppTheme.textMuted)),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: onDone,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.successGreen,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Pending ──────────────────────────────────────────────────────────────────
+
+class _PendingView extends StatelessWidget {
+  final VoidCallback onClose;
+  const _PendingView({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.donorGradientStart,
+            AppTheme.donorGradientEnd,
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ── Close button ──
+            Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: GestureDetector(
+                  onTap: onClose,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close,
+                        color: Colors.white, size: 22),
+                  ),
                 ),
-                child: const Text('Done',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              ),
+            ),
+
+            const Spacer(),
+
+            // ── Animation ──
+            Lottie.asset(
+              'assets/lottie/success.json',
+              width: 220,
+              height: 220,
+              fit: BoxFit.contain,
+              repeat: false,
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              'Photos Received!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                'We will verify your IC in 1–3 working days.\nYou will be notified once the review is complete.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 15, color: Colors.white70, height: 1.5),
+              ),
+            ),
+
+            const Spacer(),
+
+            // ── Close button ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: onClose,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.donorGradientStart,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
             ),
           ],

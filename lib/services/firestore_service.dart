@@ -984,6 +984,23 @@ class FirestoreService {
     }
   }
 
+  Future<bool> uploadICPhoto({
+    required String userId,
+    required File file,
+  }) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('ic_photos')
+          .child('$userId.jpg');
+      await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      return true;
+    } catch (e) {
+      debugPrint('[IC] photo upload failed: $e');
+      return false;
+    }
+  }
+
   Future<String?> uploadReportPhoto({
     required String reporterId,
     required File file,
