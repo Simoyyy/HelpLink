@@ -12,6 +12,7 @@ import 'package:helplink/screens/feedback_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/utils/donor_badges.dart';
 import 'package:helplink/utils/feedback_prompt.dart';
+import 'package:helplink/widgets/location_map_preview.dart';
 import 'package:helplink/widgets/report_bottom_sheet.dart';
 
 class BeneficiaryRequestDetailScreen extends StatefulWidget {
@@ -173,6 +174,15 @@ class _BeneficiaryRequestDetailScreenState
                                 icon: Icons.location_on_outlined,
                                 label: 'Location',
                                 value: liveRequest.location!,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            if (liveRequest.latitude != null &&
+                                liveRequest.longitude != null) ...[
+                              LocationMapPreview(
+                                latitude: liveRequest.latitude!,
+                                longitude: liveRequest.longitude!,
+                                label: liveRequest.location,
                               ),
                               const SizedBox(height: 12),
                             ],

@@ -10,6 +10,7 @@ import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/utils/beneficiary_profile.dart';
 import 'package:helplink/utils/feedback_prompt.dart';
+import 'package:helplink/widgets/location_map_preview.dart';
 import 'package:helplink/widgets/report_bottom_sheet.dart';
 import 'package:intl/intl.dart';
 
@@ -495,6 +496,15 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                     'Location',
                     _currentRequest.location ?? 'Not specified',
                   ),
+                  if (_currentRequest.latitude != null &&
+                      _currentRequest.longitude != null) ...[
+                    const SizedBox(height: 12),
+                    LocationMapPreview(
+                      latitude: _currentRequest.latitude!,
+                      longitude: _currentRequest.longitude!,
+                      label: _currentRequest.location,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   _buildInfoRow(
                     Icons.person_outline,
