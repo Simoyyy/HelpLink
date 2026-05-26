@@ -492,6 +492,18 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
+                    Icons.person_outline,
+                    'Requested by',
+                    _currentRequest.displayName,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoRow(
+                    Icons.calendar_today_outlined,
+                    'Date Posted',
+                    DateFormat('M/d/yyyy').format(_currentRequest.createdAt),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoRow(
                     Icons.location_on_outlined,
                     'Location',
                     _currentRequest.location ?? 'Not specified',
@@ -505,18 +517,6 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                       label: _currentRequest.location,
                     ),
                   ],
-                  const SizedBox(height: 16),
-                  _buildInfoRow(
-                    Icons.person_outline,
-                    'Requested by',
-                    _currentRequest.displayName,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow(
-                    Icons.calendar_today_outlined,
-                    'Date Posted',
-                    DateFormat('M/d/yyyy').format(_currentRequest.createdAt),
-                  ),
                   if (_currentRequest.donorName != null) ...[
                     const SizedBox(height: 16),
                     _buildInfoRow(

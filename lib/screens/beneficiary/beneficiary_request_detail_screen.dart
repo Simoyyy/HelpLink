@@ -168,6 +168,18 @@ class _BeneficiaryRequestDetailScreenState
                               value: liveRequest.categoryLabel,
                             ),
                             const SizedBox(height: 12),
+                            _InfoRow(
+                              icon: Icons.person_outline,
+                              label: 'Requested by',
+                              value: liveRequest.displayName,
+                            ),
+                            const SizedBox(height: 12),
+                            _InfoRow(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'Date Posted',
+                              value: dateStr,
+                            ),
+                            const SizedBox(height: 12),
                             if (liveRequest.location != null &&
                                 liveRequest.location!.isNotEmpty) ...[
                               _InfoRow(
@@ -186,17 +198,6 @@ class _BeneficiaryRequestDetailScreenState
                               ),
                               const SizedBox(height: 12),
                             ],
-                            _InfoRow(
-                              icon: Icons.person_outline,
-                              label: 'Requested by',
-                              value: liveRequest.displayName,
-                            ),
-                            const SizedBox(height: 12),
-                            _InfoRow(
-                              icon: Icons.calendar_today_outlined,
-                              label: 'Date Posted',
-                              value: dateStr,
-                            ),
                             if ((liveRequest.status ==
                                         RequestStatus.matched ||
                                     liveRequest.status ==
