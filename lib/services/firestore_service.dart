@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:helplink/models/help_request_model.dart';
 import 'package:helplink/models/message_model.dart';
+import 'package:helplink/models/report_model.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/utils/constants.dart';
 
@@ -964,6 +966,40 @@ class FirestoreService {
         .doc(requestId)
         .snapshots()
         .map((doc) => doc.exists ? HelpRequest.fromFirestore(doc) : null);
+  }
+
+  // ══════════════════════════════════════════════
+  // REPORTS
+  // ══════════════════════════════════════════════
+
+  Future<bool> submitReport(ReportModel report) async {
+    try {
+      await _firestore
+          .collection(AppConstants.reportsCollection)
+          .add(report.toFirestore());
+      return true;
+    } catch (e) {
+      debugPrint('[Reports] submit failed: $e');
+      return false;
+    }
+  }
+
+  Future<String?> uploadReportPhoto({
+    required String reporterId,
+    required File file,
+  }) async {
+    try {
+      final name = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('report_photos')
+          .child(reporterId)
+          .child(name);
+      await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      return await ref.getDownloadURL();
+    } catch (e) {
+      return null;
+    }
   }
 
   // ── Helpers ──

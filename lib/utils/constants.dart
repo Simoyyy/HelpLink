@@ -14,4 +14,6 @@ class AppConstants {
   static const String roleBeneficiary = 'beneficiary';
 
   static const int maxRequestsPerWeek = 5;
+
+  static const String reportsCollection = 'reports';
 }

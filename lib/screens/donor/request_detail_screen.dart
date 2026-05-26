@@ -10,6 +10,7 @@ import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/utils/beneficiary_profile.dart';
 import 'package:helplink/utils/feedback_prompt.dart';
+import 'package:helplink/widgets/report_bottom_sheet.dart';
 import 'package:intl/intl.dart';
 
 const List<String> _ratingLabels = [
@@ -388,7 +389,15 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 48),
+                      IconButton(
+                        onPressed: () => showReportSheet(
+                          context,
+                          requestId: _currentRequest.id,
+                        ),
+                        icon: const Icon(Icons.flag_outlined,
+                            color: Colors.white),
+                        tooltip: 'Report this request',
+                      ),
                     ],
                   ),
                 ),

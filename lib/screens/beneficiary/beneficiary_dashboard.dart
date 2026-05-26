@@ -13,6 +13,7 @@ import 'package:helplink/screens/beneficiary/beneficiary_request_detail_screen.d
 import 'package:helplink/screens/donor/chat_screen.dart';
 import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
+import 'package:helplink/widgets/report_bottom_sheet.dart';
 
 class BeneficiaryDashboard extends StatefulWidget {
   const BeneficiaryDashboard({super.key});
@@ -374,6 +375,20 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
                                       Icons.notifications_active_rounded,
                                       color: Colors.black,
                                       size: 22),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => showReportSheet(context),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.flag_outlined,
+                                      color: Colors.black, size: 22),
                                 ),
                               ),
                               const SizedBox(width: 8),

@@ -17,6 +17,7 @@ import 'package:helplink/screens/donor/set_location_screen.dart';
 import 'package:helplink/screens/notification_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/utils/donor_badges.dart';
+import 'package:helplink/widgets/report_bottom_sheet.dart';
 
 class DonorDashboard extends StatefulWidget {
   const DonorDashboard({super.key});
@@ -317,6 +318,20 @@ class _DonorDashboardState extends State<DonorDashboard> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Icon(Icons.notifications_outlined,
+                                color: Colors.white, size: 22),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => showReportSheet(context),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            margin: const EdgeInsets.only(right: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.flag_outlined,
                                 color: Colors.white, size: 22),
                           ),
                         ),

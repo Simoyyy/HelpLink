@@ -12,6 +12,7 @@ import 'package:helplink/screens/feedback_screen.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/utils/donor_badges.dart';
 import 'package:helplink/utils/feedback_prompt.dart';
+import 'package:helplink/widgets/report_bottom_sheet.dart';
 
 class BeneficiaryRequestDetailScreen extends StatefulWidget {
   final HelpRequest request;
@@ -113,7 +114,15 @@ class _BeneficiaryRequestDetailScreenState
                             color: Colors.white),
                       ),
                     ),
-                    const SizedBox(width: 24),
+                    IconButton(
+                      onPressed: () => showReportSheet(
+                        context,
+                        requestId: liveRequest.id,
+                      ),
+                      icon: const Icon(Icons.flag_outlined,
+                          color: Colors.white),
+                      tooltip: 'Report this request',
+                    ),
                   ],
                 ),
               ),
