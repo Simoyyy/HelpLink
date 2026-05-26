@@ -774,17 +774,25 @@ class _DonorDashboardState extends State<DonorDashboard> {
 
   Widget _buildRecommendedCard(RecommendedRequest rec) {
     final request = rec.request;
+    final isEmergency = request.isEmergency;
     return Container(
       width: 280,
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isEmergency ? const Color(0xFFFFF5F5) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isEmergency
+              ? AppTheme.errorRed.withValues(alpha: 0.5)
+              : const Color(0xFFE2E8F0),
+          width: isEmergency ? 1.5 : 1.0,
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryBlue.withValues(alpha: 0.06),
+            color: isEmergency
+                ? AppTheme.errorRed.withValues(alpha: 0.1)
+                : AppTheme.primaryBlue.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -862,23 +870,33 @@ class _DonorDashboardState extends State<DonorDashboard> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                const Color(0xFF9333EA).withValues(alpha: 0.08),
-                const Color(0xFF06B6D4).withValues(alpha: 0.08),
-              ],
+              colors: isEmergency
+                  ? [
+                      AppTheme.errorRed.withValues(alpha: 0.08),
+                      AppTheme.errorRed.withValues(alpha: 0.05),
+                    ]
+                  : [
+                      const Color(0xFF9333EA).withValues(alpha: 0.08),
+                      const Color(0xFF06B6D4).withValues(alpha: 0.08),
+                    ],
             ),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: const Color(0xFF9333EA).withValues(alpha: 0.2)),
+                color: isEmergency
+                    ? AppTheme.errorRed.withValues(alpha: 0.3)
+                    : const Color(0xFF9333EA).withValues(alpha: 0.2)),
           ),
           child: Row(children: [
-            const Text('✨', style: TextStyle(fontSize: 11)),
+            Text(isEmergency ? '🚨' : '✨',
+                style: const TextStyle(fontSize: 11)),
             const SizedBox(width: 4),
             Expanded(
               child: Text(rec.reason,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF9333EA),
+                      color: isEmergency
+                          ? AppTheme.errorRed
+                          : const Color(0xFF9333EA),
                       fontStyle: FontStyle.italic)),
             ),
           ]),
@@ -892,7 +910,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 MaterialPageRoute(
                     builder: (_) => RequestDetailScreen(request: request))),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryBlue,
+                backgroundColor:
+                    isEmergency ? AppTheme.errorRed : AppTheme.primaryBlue,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(0, 36),
                 shape: RoundedRectangleBorder(
@@ -907,6 +926,8 @@ class _DonorDashboardState extends State<DonorDashboard> {
   Widget _buildRequestCard(HelpRequest request) {
     final dateStr = DateFormat('MMM d, yyyy').format(request.createdAt);
     final isEmergency = request.isEmergency;
+    final isTaken = request.status == RequestStatus.matched ||
+        request.status == RequestStatus.active;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -916,8 +937,10 @@ class _DonorDashboardState extends State<DonorDashboard> {
           border: Border.all(
             color: isEmergency
                 ? AppTheme.errorRed.withValues(alpha: 0.5)
-                : const Color(0xFFE2E8F0),
-            width: isEmergency ? 1.5 : 1,
+                : isTaken
+                    ? AppTheme.successGreen.withValues(alpha: 0.4)
+                    : const Color(0xFFE2E8F0),
+            width: isEmergency || isTaken ? 1.5 : 1,
           )),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -938,6 +961,27 @@ class _DonorDashboardState extends State<DonorDashboard> {
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
+              ]),
+            ),
+          ],
+          if (isTaken) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                  color: AppTheme.successGreen.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppTheme.successGreen.withValues(alpha: 0.4))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.volunteer_activism_rounded,
+                    size: 12, color: AppTheme.successGreen),
+                const SizedBox(width: 4),
+                Text('Being Helped',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.successGreen)),
               ]),
             ),
           ],
@@ -995,14 +1039,25 @@ class _DonorDashboardState extends State<DonorDashboard> {
                 MaterialPageRoute(
                     builder: (_) => RequestDetailScreen(request: request))),
             style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    isEmergency ? AppTheme.errorRed : AppTheme.primaryBlue,
-                foregroundColor: Colors.white,
+                backgroundColor: isTaken
+                    ? AppTheme.successGreen.withValues(alpha: 0.15)
+                    : isEmergency
+                        ? AppTheme.errorRed
+                        : AppTheme.primaryBlue,
+                foregroundColor:
+                    isTaken ? AppTheme.successGreen : Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 10),
+                elevation: isTaken ? 0 : null,
+                side: isTaken
+                    ? BorderSide(
+                        color: AppTheme.successGreen.withValues(alpha: 0.4))
+                    : null,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            child: const Text('View Details',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            child: Text(
+                isTaken ? 'Being Helped — View Details' : 'View Details',
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
           ),
         ),
       ]),
@@ -1496,34 +1551,31 @@ class _EmergencyRequestPrompt extends StatelessWidget {
 
               const Spacer(),
 
-              // Icon
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.crisis_alert_rounded,
-                    color: Colors.white, size: 48),
+              // Lottie SOS animation
+              Lottie.asset(
+                'assets/lottie/sos.json',
+                width: 180,
+                height: 180,
+                fit: BoxFit.contain,
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 12),
 
               const Text(
-                'Emergency Nearby!',
+                '🚨 Emergency Nearby!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: Colors.white),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'Someone urgently needs assistance in your area.',
+                  'There is an emergency request in your area that needs\nimmediate help as soon as possible.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: Colors.white70),
+                  style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.5),
                 ),
               ),
 

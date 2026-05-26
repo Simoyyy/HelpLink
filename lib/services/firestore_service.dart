@@ -92,31 +92,47 @@ class FirestoreService {
             snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc)).toList());
   }
 
-  /// Stream all available help requests for donors (pending only).
+  /// Stream help requests for donors — pending (available) + matched/active
+  /// (being helped, visible but not actionable). Sorted pending-first then by date.
   /// Requests submitted by [excludeUserId] are filtered out client-side.
   Stream<List<HelpRequest>> getAvailableRequests({
     RequestCategory? category,
     String? excludeUserId,
   }) {
+    final statuses = [
+      RequestStatus.pending.name,
+      RequestStatus.matched.name,
+      RequestStatus.active.name,
+    ];
+
     Query query = _firestore
         .collection(AppConstants.helpRequestsCollection)
-        .where('status', isEqualTo: RequestStatus.pending.name)
+        .where('status', whereIn: statuses)
         .orderBy('createdAt', descending: true);
 
     if (category != null) {
       query = _firestore
           .collection(AppConstants.helpRequestsCollection)
-          .where('status', isEqualTo: RequestStatus.pending.name)
+          .where('status', whereIn: statuses)
           .where('category', isEqualTo: category.name)
           .orderBy('createdAt', descending: true);
     }
 
     return query.snapshots().map((snapshot) {
-      final requests = snapshot.docs
+      var requests = snapshot.docs
           .map((doc) => HelpRequest.fromFirestore(doc))
           .toList();
-      if (excludeUserId == null) return requests;
-      return requests.where((r) => r.beneficiaryId != excludeUserId).toList();
+      if (excludeUserId != null) {
+        requests = requests.where((r) => r.beneficiaryId != excludeUserId).toList();
+      }
+      // Pending requests first, then matched/active
+      requests.sort((a, b) {
+        final aOrder = a.status == RequestStatus.pending ? 0 : 1;
+        final bOrder = b.status == RequestStatus.pending ? 0 : 1;
+        if (aOrder != bOrder) return aOrder.compareTo(bOrder);
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return requests;
     });
   }
 
