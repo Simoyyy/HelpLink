@@ -81,16 +81,20 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     }
   }
 
+  Color get _accent => _currentRequest.isEmergency
+      ? AppTheme.errorRed
+      : AppTheme.primaryBlue;
+
   Color get _statusColor {
     switch (_currentRequest.status) {
       case RequestStatus.pending:
         return const Color(0xFFB8860B);
       case RequestStatus.matched:
-        return AppTheme.primaryBlue;
+        return _accent;
       case RequestStatus.active:
         return AppTheme.successGreen;
       case RequestStatus.pendingConfirmation:
-        return AppTheme.primaryBlue;
+        return _accent;
       case RequestStatus.completed:
         return AppTheme.textMuted;
       case RequestStatus.cancelled:
@@ -103,11 +107,11 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       case RequestStatus.pending:
         return const Color(0xFFFFF8DC);
       case RequestStatus.matched:
-        return AppTheme.primaryBlue.withValues(alpha: 0.1);
+        return _accent.withValues(alpha: 0.1);
       case RequestStatus.active:
         return AppTheme.successGreen.withValues(alpha: 0.1);
       case RequestStatus.pendingConfirmation:
-        return AppTheme.primaryBlue.withValues(alpha: 0.1);
+        return _accent.withValues(alpha: 0.1);
       case RequestStatus.completed:
         return AppTheme.textMuted.withValues(alpha: 0.1);
       case RequestStatus.cancelled:
@@ -350,18 +354,20 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Blue gradient header
+          // Header — blue for normal, red for emergency
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(0, 48, 0, 24),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.donorGradientStart,
-                  AppTheme.donorGradientEnd,
-                ],
+                colors: _currentRequest.isEmergency
+                    ? const [Color(0xFFD32F2F), Color(0xFFB71C1C)]
+                    : const [
+                        AppTheme.donorGradientStart,
+                        AppTheme.donorGradientEnd
+                      ],
               ),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(24),
@@ -442,7 +448,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                   ? AppTheme.errorRed
                                   : isOverdue
                                       ? AppTheme.warningOrange
-                                      : AppTheme.primaryBlue)
+                                      : _accent)
                               .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
@@ -450,7 +456,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                     ? AppTheme.errorRed
                                     : isOverdue
                                         ? AppTheme.warningOrange
-                                        : AppTheme.primaryBlue)
+                                        : _accent)
                                 .withValues(alpha: 0.4),
                           ),
                         ),
@@ -465,7 +471,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                 ? AppTheme.errorRed
                                 : isOverdue
                                     ? AppTheme.warningOrange
-                                    : AppTheme.primaryBlue,
+                                    : _accent,
                           ),
                         ),
                       ),
@@ -650,24 +656,23 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryBlue.withValues(alpha: 0.07),
+                        color: _accent.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                            color:
-                                AppTheme.primaryBlue.withValues(alpha: 0.25)),
+                            color: _accent.withValues(alpha: 0.25)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(
+                          SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
-                                color: AppTheme.primaryBlue),
+                                color: _accent),
                           ),
                           const SizedBox(width: 14),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -676,14 +681,14 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: AppTheme.primaryBlue),
+                                      color: _accent),
                                 ),
-                                SizedBox(height: 4),
+                                const SizedBox(height: 4),
                                 Text(
                                   'Your delivery has been submitted. The beneficiary will confirm receipt in their app.',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: AppTheme.primaryBlue),
+                                      color: _accent),
                                 ),
                               ],
                             ),
@@ -744,11 +749,13 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F4FF),
+                          color: _currentRequest.isEmergency
+                              ? const Color(0xFFFFF5F5)
+                              : const Color(0xFFF0F4FF),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: _acceptAnonymously
-                                ? AppTheme.primaryBlue
+                                ? _accent
                                 : const Color(0xFFE2E8F0),
                           ),
                         ),
@@ -762,7 +769,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                 value: _acceptAnonymously,
                                 onChanged: (v) => setState(
                                     () => _acceptAnonymously = v ?? false),
-                                activeColor: AppTheme.primaryBlue,
+                                activeColor: _accent,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(4)),
                               ),
@@ -777,7 +784,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                                     children: [
                                       Icon(Icons.visibility_off,
                                           size: 18,
-                                          color: AppTheme.primaryBlue),
+                                          color: _accent),
                                       const SizedBox(width: 6),
                                       const Text(
                                         'Accept Anonymously',
