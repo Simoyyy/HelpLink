@@ -529,43 +529,68 @@ class _RequestCard extends StatelessWidget {
     Color bg;
     Color fg;
     String label;
+    IconData icon;
     switch (status) {
       case RequestStatus.pending:
         bg = const Color(0xFFFFF8E1);
         fg = AppTheme.warningOrange;
         label = 'Pending';
+        icon = Icons.hourglass_top_rounded;
         break;
       case RequestStatus.matched:
         bg = const Color(0xFFEDE7F6);
         fg = AppTheme.primaryPurple;
         label = 'In Progress';
+        icon = Icons.handshake_rounded;
         break;
       case RequestStatus.active:
         bg = const Color(0xFFE3F2FD);
         fg = AppTheme.primaryBlue;
         label = 'In Progress';
+        icon = Icons.bolt_rounded;
         break;
       case RequestStatus.pendingConfirmation:
         bg = const Color(0xFFE3F2FD);
         fg = AppTheme.primaryBlue;
         label = 'Awaiting Confirmation';
+        icon = Icons.pending_rounded;
         break;
       case RequestStatus.completed:
-        bg = Colors.grey[100]!;
-        fg = AppTheme.textMuted;
+        bg = const Color(0xFFE8F5E9);
+        fg = AppTheme.successGreen;
         label = 'Completed';
+        icon = Icons.check_circle_rounded;
         break;
       case RequestStatus.cancelled:
         bg = const Color(0xFFFFEBEE);
         fg = AppTheme.errorRed;
         label = 'Cancelled';
+        icon = Icons.cancel_rounded;
         break;
     }
-    return _chip(label, bg, fg);
+    return _statusChipWidget(label, bg, fg, icon);
   }
 
   Widget _categoryChip(String label) =>
       _chip(label, const Color(0xFFEDE7F6), AppTheme.primaryPurple);
+
+  Widget _statusChipWidget(String label, Color bg, Color fg, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+        ],
+      ),
+    );
+  }
 
   Widget _chip(String label, Color bg, Color fg) {
     return Container(

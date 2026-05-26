@@ -480,36 +480,43 @@ class _HistoryCard extends StatelessWidget {
     String label;
     Color color;
     Color bg;
+    IconData icon;
     switch (status) {
       case RequestStatus.pending:
         label = 'Pending';
         color = AppTheme.warningOrange;
         bg = const Color(0xFFFFF8E1);
+        icon = Icons.hourglass_top_rounded;
         break;
       case RequestStatus.matched:
         label = 'Accepted';
         color = AppTheme.primaryBlue;
         bg = const Color(0xFFE3F2FD);
+        icon = Icons.handshake_rounded;
         break;
       case RequestStatus.active:
         label = 'Active';
         color = AppTheme.primaryBlue;
         bg = const Color(0xFFE3F2FD);
+        icon = Icons.bolt_rounded;
         break;
       case RequestStatus.pendingConfirmation:
         label = 'Awaiting Confirmation';
         color = AppTheme.primaryBlue;
         bg = const Color(0xFFE3F2FD);
+        icon = Icons.pending_rounded;
         break;
       case RequestStatus.completed:
         label = 'Completed';
         color = AppTheme.successGreen;
         bg = const Color(0xFFE8F5E9);
+        icon = Icons.check_circle_rounded;
         break;
       case RequestStatus.cancelled:
         label = 'Cancelled';
         color = AppTheme.errorRed;
         bg = const Color(0xFFFFEBEE);
+        icon = Icons.cancel_rounded;
         break;
     }
     return Container(
@@ -519,7 +526,7 @@ class _HistoryCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.circle, size: 7, color: color),
+          Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
           Text(label,
               style: TextStyle(

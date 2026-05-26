@@ -610,14 +610,16 @@ class _DonorDashboardState extends State<DonorDashboard> {
                     ),
                   );
                 }
-                return SizedBox(
-                  height: 265,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) =>
-                        _buildRecommendedCard(snapshot.data![index]),
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: snapshot.data!
+                          .map((rec) => _buildRecommendedCard(rec))
+                          .toList(),
+                    ),
                   ),
                 );
               },

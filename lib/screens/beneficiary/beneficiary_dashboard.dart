@@ -1284,8 +1284,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
         icon = Icons.pending_rounded;
         break;
       case RequestStatus.completed:
-        bgColor = Colors.grey[100]!;
-        textColor = AppTheme.textMuted;
+        bgColor = const Color(0xFFE8F5E9);
+        textColor = AppTheme.successGreen;
         icon = Icons.check_circle_rounded;
         break;
       case RequestStatus.cancelled:

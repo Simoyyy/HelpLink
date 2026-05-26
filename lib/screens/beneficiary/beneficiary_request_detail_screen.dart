@@ -971,47 +971,61 @@ class _StatusPill extends StatelessWidget {
     Color bg;
     Color fg;
     String label;
+    IconData icon;
     switch (status) {
       case RequestStatus.pending:
         bg = const Color(0xFFFFF8E1);
         fg = AppTheme.warningOrange;
         label = 'Awaiting Donor';
+        icon = Icons.hourglass_top_rounded;
         break;
       case RequestStatus.matched:
         bg = const Color(0xFFEDE7F6);
         fg = AppTheme.primaryPurple;
         label = 'Accepted';
+        icon = Icons.handshake_rounded;
         break;
       case RequestStatus.pendingConfirmation:
         bg = const Color(0xFFE3F2FD);
         fg = AppTheme.primaryBlue;
         label = 'Awaiting Your Confirmation';
+        icon = Icons.pending_rounded;
         break;
       case RequestStatus.active:
         bg = const Color(0xFFE3F2FD);
         fg = AppTheme.primaryBlue;
         label = 'In Progress';
+        icon = Icons.bolt_rounded;
         break;
       case RequestStatus.completed:
-        bg = Colors.grey[100]!;
-        fg = AppTheme.textMuted;
+        bg = const Color(0xFFE8F5E9);
+        fg = AppTheme.successGreen;
         label = 'Completed';
+        icon = Icons.check_circle_rounded;
         break;
       case RequestStatus.cancelled:
         bg = const Color(0xFFFFEBEE);
         fg = AppTheme.errorRed;
         label = 'Cancelled';
+        icon = Icons.cancel_rounded;
         break;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: fg)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: fg)),
+        ],
+      ),
     );
   }
 }

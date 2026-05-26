@@ -81,6 +81,23 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     }
   }
 
+  IconData get _statusIcon {
+    switch (_currentRequest.status) {
+      case RequestStatus.pending:
+        return Icons.hourglass_top_rounded;
+      case RequestStatus.matched:
+        return Icons.handshake_rounded;
+      case RequestStatus.active:
+        return Icons.bolt_rounded;
+      case RequestStatus.pendingConfirmation:
+        return Icons.pending_rounded;
+      case RequestStatus.completed:
+        return Icons.check_circle_rounded;
+      case RequestStatus.cancelled:
+        return Icons.cancel_rounded;
+    }
+  }
+
   Color get _accent => _currentRequest.isEmergency
       ? AppTheme.errorRed
       : AppTheme.primaryBlue;
@@ -96,7 +113,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       case RequestStatus.pendingConfirmation:
         return _accent;
       case RequestStatus.completed:
-        return AppTheme.textMuted;
+        return AppTheme.successGreen;
       case RequestStatus.cancelled:
         return AppTheme.errorRed;
     }
@@ -113,7 +130,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       case RequestStatus.pendingConfirmation:
         return _accent.withValues(alpha: 0.1);
       case RequestStatus.completed:
-        return AppTheme.textMuted.withValues(alpha: 0.1);
+        return const Color(0xFFE8F5E9);
       case RequestStatus.cancelled:
         return AppTheme.errorRed.withValues(alpha: 0.1);
     }
@@ -427,13 +444,20 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                         color: _statusBgColor,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        _statusLabel,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _statusColor,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_statusIcon, size: 14, color: _statusColor),
+                          const SizedBox(width: 6),
+                          Text(
+                            _statusLabel,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _statusColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
