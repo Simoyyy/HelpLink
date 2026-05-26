@@ -503,6 +503,12 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                         ),
                         const SizedBox(height: 12),
                         _buildInfoRow(
+                          Icons.notes_rounded,
+                          'Description',
+                          _currentRequest.description,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(
                           Icons.person_outline,
                           'Requested by',
                           _currentRequest.displayName,
@@ -536,26 +542,6 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                             _currentRequest.donorName!,
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        const Divider(color: Color(0xFFE2E8F0)),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Description',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _currentRequest.description,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.textMuted,
-                            height: 1.5,
-                          ),
-                        ),
                       ],
                     ),
                   ),

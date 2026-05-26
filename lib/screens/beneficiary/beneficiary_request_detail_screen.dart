@@ -169,6 +169,12 @@ class _BeneficiaryRequestDetailScreenState
                             ),
                             const SizedBox(height: 12),
                             _InfoRow(
+                              icon: Icons.notes_rounded,
+                              label: 'Description',
+                              value: liveRequest.description,
+                            ),
+                            const SizedBox(height: 12),
+                            _InfoRow(
                               icon: Icons.person_outline,
                               label: 'Requested by',
                               value: liveRequest.displayName,
@@ -214,24 +220,6 @@ class _BeneficiaryRequestDetailScreenState
                                     : null,
                               ),
                             ],
-                            const SizedBox(height: 16),
-                            const Divider(color: Color(0xFFE2E8F0)),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Description',
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textDark),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              liveRequest.description,
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppTheme.textMuted,
-                                  height: 1.5),
-                            ),
                           ],
                         ),
                       ),
