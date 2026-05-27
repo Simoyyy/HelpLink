@@ -614,13 +614,13 @@ class FirestoreService {
     required File file,
   }) async {
     try {
-      final name = '${DateTime.now().millisecondsSinceEpoch}.wav';
+      final name = '${DateTime.now().millisecondsSinceEpoch}.m4a';
       final ref = FirebaseStorage.instance
           .ref()
           .child('voice_notes')
           .child(requestId)
           .child(name);
-      await ref.putFile(file, SettableMetadata(contentType: 'audio/wav'));
+      await ref.putFile(file, SettableMetadata(contentType: 'audio/mp4'));
       return await ref.getDownloadURL();
     } catch (e) {
       return null;
