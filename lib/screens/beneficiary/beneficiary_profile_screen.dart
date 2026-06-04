@@ -3,10 +3,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:helplink/screens/beneficiary/location_picker.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
@@ -31,6 +33,8 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
   bool _showSuccess = false;
   bool _isUploadingPhoto = false;
   bool _hasPrecachedImage = false;
+  double? _selectedLat;
+  double? _selectedLng;
 
   @override
   void initState() {
@@ -40,6 +44,27 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     _icController = TextEditingController(text: user?.icNumber ?? '');
     _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
     _locationController = TextEditingController(text: user?.location ?? '');
+    _selectedLat = user?.latitude;
+    _selectedLng = user?.longitude;
+  }
+
+  Future<void> _openMapPicker() async {
+    final initial = (_selectedLat != null && _selectedLng != null)
+        ? LatLng(_selectedLat!, _selectedLng!)
+        : null;
+    final result = await Navigator.push<MapPickResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FullScreenMapPicker(initialPosition: initial),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _locationController.text = result.address;
+        _selectedLat = result.latLng.latitude;
+        _selectedLng = result.latLng.longitude;
+      });
+    }
   }
 
   @override
@@ -64,6 +89,13 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_locationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select a location from the map.'),
+        backgroundColor: AppTheme.errorRed,
+      ));
+      return;
+    }
     setState(() => _isSaving = true);
 
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -79,6 +111,8 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
         'icNumber': _icController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
+        if (_selectedLat != null) 'latitude': _selectedLat,
+        if (_selectedLng != null) 'longitude': _selectedLng,
       },
     );
 
@@ -705,17 +739,7 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                                 : null,
                           ),
                           _divider(),
-                          _profileField(
-                            label: 'Location *',
-                            controller: _locationController,
-                            icon: Icons.location_on_outlined,
-                            enabled: _isEditing,
-                            accentColor: AppTheme.primaryPurple,
-                            isLast: true,
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'Required'
-                                : null,
-                          ),
+                          _locationField(accentColor: AppTheme.primaryPurple),
                         ],
                       ),
                     ),
@@ -841,6 +865,51 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
   Widget _divider() => const Divider(
       height: 1, thickness: 1, color: Color(0xFFE2E8F0), indent: 16);
 
+  Widget _locationField({required Color accentColor}) {
+    final hasLocation = _locationController.text.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Location *',
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: _isEditing ? _openMapPicker : null,
+            child: Row(
+              children: [
+                _fieldIcon(
+                  Icons.location_on_outlined,
+                  _isEditing ? accentColor : AppTheme.textMuted,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    hasLocation
+                        ? _locationController.text
+                        : _isEditing
+                            ? 'Tap to pick location on map'
+                            : '—',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: hasLocation
+                          ? AppTheme.textDark
+                          : AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+                if (_isEditing)
+                  const Icon(Icons.chevron_right,
+                      size: 18, color: AppTheme.textMuted),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _profileField({
     required String label,
     TextEditingController? controller,
@@ -848,7 +917,6 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     required IconData icon,
     required bool enabled,
     required Color accentColor,
-    bool isLast = false,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
