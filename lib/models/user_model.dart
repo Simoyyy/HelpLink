@@ -20,6 +20,8 @@ class UserModel {
 
   final bool icPendingVerification;
 
+  final bool isPhoneVerified;
+
   // Donor moderation
   final int cancellationStrikes;
   final DateTime? strikeWindowStart;
@@ -42,6 +44,7 @@ class UserModel {
     this.isICVerified = false,
     this.icVerifiedAt,
     this.icPendingVerification = false,
+    this.isPhoneVerified = false,
     this.cancellationStrikes = 0,
     this.strikeWindowStart,
     this.banUntil,
@@ -74,6 +77,7 @@ class UserModel {
       isICVerified: data['isICVerified'] == true,
       icVerifiedAt: (data['icVerifiedAt'] as Timestamp?)?.toDate(),
       icPendingVerification: data['icPendingVerification'] == true,
+      isPhoneVerified: data['isPhoneVerified'] == true,
       cancellationStrikes: (data['cancellationStrikes'] as int?) ?? 0,
       strikeWindowStart: (data['strikeWindowStart'] as Timestamp?)?.toDate(),
       banUntil: (data['banUntil'] as Timestamp?)?.toDate(),
@@ -98,6 +102,7 @@ class UserModel {
       'icVerifiedAt':
           icVerifiedAt != null ? Timestamp.fromDate(icVerifiedAt!) : null,
       'icPendingVerification': icPendingVerification,
+      'isPhoneVerified': isPhoneVerified,
       'cancellationStrikes': cancellationStrikes,
       'strikeWindowStart': strikeWindowStart != null
           ? Timestamp.fromDate(strikeWindowStart!)
@@ -121,6 +126,7 @@ class UserModel {
     bool? isICVerified,
     DateTime? icVerifiedAt,
     bool? icPendingVerification,
+    bool? isPhoneVerified,
     int? cancellationStrikes,
     DateTime? strikeWindowStart,
     DateTime? banUntil,
@@ -142,6 +148,7 @@ class UserModel {
       isICVerified: isICVerified ?? this.isICVerified,
       icVerifiedAt: icVerifiedAt ?? this.icVerifiedAt,
       icPendingVerification: icPendingVerification ?? this.icPendingVerification,
+      isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
       cancellationStrikes: cancellationStrikes ?? this.cancellationStrikes,
       strikeWindowStart: strikeWindowStart ?? this.strikeWindowStart,
       banUntil: banUntil ?? this.banUntil,

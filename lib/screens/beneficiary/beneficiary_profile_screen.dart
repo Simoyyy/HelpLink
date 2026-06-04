@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:helplink/models/user_model.dart';
 import 'package:helplink/screens/beneficiary/location_picker.dart';
+import 'package:helplink/screens/phone_verification_screen.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
@@ -24,8 +26,6 @@ class BeneficiaryProfileScreen extends StatefulWidget {
 class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
-  late final TextEditingController _icController;
-  late final TextEditingController _phoneController;
   late final TextEditingController _locationController;
 
   bool _isEditing = false;
@@ -41,8 +41,6 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     super.initState();
     final user = Provider.of<AuthService>(context, listen: false).userModel;
     _nameController = TextEditingController(text: user?.fullName ?? '');
-    _icController = TextEditingController(text: user?.icNumber ?? '');
-    _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
     _locationController = TextEditingController(text: user?.location ?? '');
     _selectedLat = user?.latitude;
     _selectedLng = user?.longitude;
@@ -67,6 +65,39 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     }
   }
 
+  Future<void> _openPhoneVerification({required bool isChange, String? existingPhone}) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final user = authService.userModel;
+    if (user == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PhoneVerificationScreen(
+          isChange: isChange,
+          existingPhone: existingPhone,
+          userEmail: user.email,
+          userId: user.uid,
+          onVerified: (phone) async {
+            final fs = Provider.of<FirestoreService>(context, listen: false);
+            await fs.updateUserProfile(
+              userId: user.uid,
+              data: {'phoneNumber': phone, 'isPhoneVerified': true},
+            );
+            await authService.loadUserData();
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Phone number verified and saved!'),
+                backgroundColor: AppTheme.successGreen,
+              ));
+            }
+          },
+        ),
+      ),
+    );
+    if (mounted) await authService.loadUserData();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -81,8 +112,6 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _icController.dispose();
-    _phoneController.dispose();
     _locationController.dispose();
     super.dispose();
   }
@@ -108,8 +137,6 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
       userId: user.uid,
       data: {
         'fullName': _nameController.text.trim(),
-        'icNumber': _icController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
         if (_selectedLat != null) 'latitude': _selectedLat,
         if (_selectedLng != null) 'longitude': _selectedLng,
@@ -622,22 +649,11 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                         children: [
                           _profileField(
                             label: 'Full Name *',
+                            hint: 'Enter your full name as per your IC card',
                             controller: _nameController,
                             icon: Icons.person_outline,
                             enabled: _isEditing,
                             accentColor: AppTheme.primaryPurple,
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'Required'
-                                : null,
-                          ),
-                          _divider(),
-                          _profileField(
-                            label: 'IC Number *',
-                            controller: _icController,
-                            icon: Icons.badge_outlined,
-                            enabled: _isEditing,
-                            accentColor: AppTheme.primaryPurple,
-                            keyboardType: TextInputType.number,
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? 'Required'
                                 : null,
@@ -727,17 +743,7 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                             accentColor: AppTheme.primaryPurple,
                           ),
                           _divider(),
-                          _profileField(
-                            label: 'Phone Number *',
-                            controller: _phoneController,
-                            icon: Icons.phone_outlined,
-                            enabled: _isEditing,
-                            accentColor: AppTheme.primaryPurple,
-                            keyboardType: TextInputType.phone,
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'Required'
-                                : null,
-                          ),
+                          _phoneField(user: user, accentColor: AppTheme.primaryPurple),
                           _divider(),
                           _locationField(accentColor: AppTheme.primaryPurple),
                         ],
@@ -910,8 +916,76 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     );
   }
 
+  Widget _phoneField({required UserModel user, required Color accentColor}) {
+    final phone = user.phoneNumber;
+    final verified = user.isPhoneVerified;
+    final hasPhone = phone != null && phone.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Phone Number',
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _fieldIcon(
+                Icons.phone_outlined,
+                verified
+                    ? AppTheme.successGreen
+                    : hasPhone
+                        ? AppTheme.warningOrange
+                        : accentColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasPhone ? phone : 'Not set',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: hasPhone ? AppTheme.textDark : AppTheme.textMuted,
+                      ),
+                    ),
+                    if (hasPhone)
+                      Text(
+                        verified ? 'Verified ✓' : 'Not verified — tap to verify',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: verified ? AppTheme.successGreen : AppTheme.warningOrange,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_isEditing)
+                TextButton(
+                  onPressed: () => _openPhoneVerification(
+                    isChange: verified && hasPhone,
+                    existingPhone: hasPhone ? phone : null,
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: accentColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  child: Text(
+                    verified ? 'Change' : (hasPhone ? 'Verify' : 'Set Number'),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _profileField({
     required String label,
+    String? hint,
     TextEditingController? controller,
     String? value,
     required IconData icon,
@@ -944,6 +1018,9 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                         decoration: InputDecoration(
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
+                          hintText: hint,
+                          hintStyle: const TextStyle(
+                              fontSize: 13, color: AppTheme.textMuted),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: UnderlineInputBorder(

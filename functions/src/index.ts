@@ -396,6 +396,59 @@ export const checkPasswordResetCode = onCall(
   return { success: true };
 });
 
+// ─── Phone Change — Email OTP ────────────────────────────────────────────────
+// When a user wants to change their verified phone number they can choose to
+// confirm via email instead of SMS. These two functions handle that path.
+
+export const sendPhoneChangeOTP = onCall(
+  { secrets: [gmailEmail, gmailPassword], enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
+    const { uid, email, name } = request.data as {
+      uid: string; email: string; name?: string;
+    };
+    if (!uid || !email) throw new HttpsError("invalid-argument", "uid and email are required");
+
+    const code = generateCode();
+    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000));
+
+    await db.collection("phone_change_otps").doc(uid).set({
+      code, email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt, used: false,
+    });
+
+    const transport = createTransport(gmailEmail.value(), gmailPassword.value());
+    await transport.sendMail({
+      from: `"HelpLink" <${gmailEmail.value()}>`,
+      to: email,
+      subject: "HelpLink — Confirm Phone Number Change",
+      html: verificationTemplate(code, name ?? "there"),
+    });
+
+    return { success: true };
+  }
+);
+
+export const verifyPhoneChangeOTP = onCall(
+  { enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
+    const { uid, code } = request.data as { uid: string; code: string };
+    if (!uid || !code) throw new HttpsError("invalid-argument", "uid and code are required");
+
+    const snap = await db.collection("phone_change_otps").doc(uid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "No code found. Please request a new one.");
+
+    const otp = snap.data()!;
+    if (otp.used) throw new HttpsError("already-exists", "Code already used.");
+    if ((otp.expiresAt as admin.firestore.Timestamp).toDate() < new Date())
+      throw new HttpsError("deadline-exceeded", "Code expired. Please request a new one.");
+    if (otp.code !== code) throw new HttpsError("unauthenticated", "Incorrect code.");
+
+    await snap.ref.update({ used: true });
+    return { success: true };
+  }
+);
+
 // ─── Stale Request Auto-Withdrawal ──────────────────────────────────────────
 // Runs every 30 minutes. For each matched/active request older than 4 hours:
 //   - Re-opens the request to "pending" (beneficiary gets re-matched)
