@@ -397,42 +397,105 @@ export const checkPasswordResetCode = onCall(
 });
 
 // ─── Stale Request Auto-Withdrawal ──────────────────────────────────────────
+// Runs every 30 minutes. For each matched/active request older than 4 hours:
+//   - Re-opens the request to "pending" (beneficiary gets re-matched)
+//   - Increments donor's autoWithdrawalCount and applies a progressive ban:
+//       1st offence → 6h ban | 2nd → 24h ban | 3rd+ → 48h ban
+//   - Sends FCM push to both donor (ban notice) and beneficiary (re-opened notice)
 
 export const processStaleRequests = onSchedule(
   { schedule: "every 30 minutes", region: "asia-southeast1" },
   async () => {
     const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
-    const staleSnap = await db
+
+    // Query by matchedAt only (avoids needing a composite index with status).
+    // Filter status in memory.
+    const snap = await db
       .collection("help_requests")
-      .where("status", "in", ["matched", "active"])
       .where("matchedAt", "<=", admin.firestore.Timestamp.fromDate(cutoff))
       .get();
 
-    if (staleSnap.empty) return;
+    if (snap.empty) return;
 
-    const batches: admin.firestore.WriteBatch[] = [];
-    let batch = db.batch();
-    let opCount = 0;
+    const staleDocs = snap.docs.filter((doc) => {
+      const s = doc.data().status as string;
+      return s === "matched" || s === "active";
+    });
 
-    for (const doc of staleSnap.docs) {
-      batch.update(doc.ref, {
-        status: "cancelled",
-        cancelledBy: "system",
-        cancelReason: "Auto-cancelled: delivery not completed within 4 hours",
-        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    if (staleDocs.length === 0) return;
+
+    let withdrawn = 0;
+
+    for (const doc of staleDocs) {
+      const data = doc.data();
+      const donorId = data.donorId as string | undefined;
+      const title = (data.title as string | undefined) ?? "your request";
+      const beneficiaryId = data.beneficiaryId as string | undefined;
+
+      // 1. Re-open request to pending so another donor can accept it.
+      await doc.ref.update({
+        status: "pending",
+        donorId: null,
+        donorName: null,
+        matchedAt: null,
+        autoWithdrawnAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      opCount++;
-      // Firestore batch limit is 500 operations
-      if (opCount === 499) {
-        batches.push(batch);
-        batch = db.batch();
-        opCount = 0;
-      }
-    }
-    if (opCount > 0) batches.push(batch);
 
-    await Promise.all(batches.map((b) => b.commit()));
-    console.log(`Auto-withdrew ${staleSnap.docs.length} stale request(s).`);
+      // 2. Apply progressive ban to the donor.
+      if (donorId) {
+        const donorRef = db.collection("users").doc(donorId);
+
+        const banHours = await db.runTransaction(async (tx) => {
+          const donorSnap = await tx.get(donorRef);
+          const d = donorSnap.data() ?? {};
+          const newCount = ((d.autoWithdrawalCount as number) ?? 0) + 1;
+
+          let hours: number;
+          if (newCount === 1) hours = 6;
+          else if (newCount === 2) hours = 24;
+          else hours = 48;
+
+          const banUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
+          tx.update(donorRef, {
+            autoWithdrawalCount: newCount,
+            banUntil: admin.firestore.Timestamp.fromDate(banUntil),
+          });
+          return hours;
+        });
+
+        // 3. Notify donor of withdrawal + ban.
+        const donorDoc = await donorRef.get();
+        const donorFcm = donorDoc.data()?.fcmToken as string | undefined;
+        if (donorFcm) {
+          const banText =
+            banHours === 6 ? "6 hours" : banHours === 24 ? "1 day" : "2 days";
+          await sendPush(
+            donorFcm,
+            "Request Auto-Withdrawn ⚠️",
+            `You were removed from "${title}" for not completing it within 4 hours. You are banned for ${banText}.`,
+            { type: "auto_withdrawal", requestId: doc.id }
+          );
+        }
+      }
+
+      // 4. Notify beneficiary that their request is re-opened.
+      if (beneficiaryId) {
+        const benDoc = await db.collection("users").doc(beneficiaryId).get();
+        const benFcm = benDoc.data()?.fcmToken as string | undefined;
+        if (benFcm) {
+          await sendPush(
+            benFcm,
+            "Request Re-opened 🔄",
+            `Your request "${title}" is available again — the donor did not complete it in time.`,
+            { type: "request_reopened", requestId: doc.id }
+          );
+        }
+      }
+
+      withdrawn++;
+    }
+
+    console.log(`Auto-withdrew ${withdrawn} stale request(s).`);
   }
 );
 

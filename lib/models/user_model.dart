@@ -24,6 +24,7 @@ class UserModel {
   final int cancellationStrikes;
   final DateTime? strikeWindowStart;
   final DateTime? banUntil;
+  final int autoWithdrawalCount;
 
   UserModel({
     required this.uid,
@@ -44,6 +45,7 @@ class UserModel {
     this.cancellationStrikes = 0,
     this.strikeWindowStart,
     this.banUntil,
+    this.autoWithdrawalCount = 0,
   });
 
   bool get isBanned =>
@@ -75,6 +77,7 @@ class UserModel {
       cancellationStrikes: (data['cancellationStrikes'] as int?) ?? 0,
       strikeWindowStart: (data['strikeWindowStart'] as Timestamp?)?.toDate(),
       banUntil: (data['banUntil'] as Timestamp?)?.toDate(),
+      autoWithdrawalCount: (data['autoWithdrawalCount'] as int?) ?? 0,
     );
   }
 
@@ -100,6 +103,7 @@ class UserModel {
           ? Timestamp.fromDate(strikeWindowStart!)
           : null,
       'banUntil': banUntil != null ? Timestamp.fromDate(banUntil!) : null,
+      'autoWithdrawalCount': autoWithdrawalCount,
     };
   }
 
@@ -120,6 +124,7 @@ class UserModel {
     int? cancellationStrikes,
     DateTime? strikeWindowStart,
     DateTime? banUntil,
+    int? autoWithdrawalCount,
   }) {
     return UserModel(
       uid: uid,
@@ -140,6 +145,7 @@ class UserModel {
       cancellationStrikes: cancellationStrikes ?? this.cancellationStrikes,
       strikeWindowStart: strikeWindowStart ?? this.strikeWindowStart,
       banUntil: banUntil ?? this.banUntil,
+      autoWithdrawalCount: autoWithdrawalCount ?? this.autoWithdrawalCount,
     );
   }
 }
