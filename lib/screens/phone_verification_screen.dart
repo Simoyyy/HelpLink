@@ -479,6 +479,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           onChanged: (phone) {
             setState(() => _completePhone = phone.completeNumber);
           },
+          validator: (_) => null,
+          autovalidateMode: AutovalidateMode.disabled,
           languageCode: 'en',
           dropdownIconPosition: IconPosition.trailing,
           dropdownIcon: const Icon(Icons.arrow_drop_down, color: AppTheme.textMuted),
