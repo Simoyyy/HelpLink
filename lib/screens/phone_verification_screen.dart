@@ -59,6 +59,10 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   void initState() {
     super.initState();
     _step = widget.isChange ? _Step.chooseMethod : _Step.enterPhone;
+    // Pre-fill existing number so user can verify it directly, or clear to enter a new one
+    if (!widget.isChange && widget.existingPhone != null) {
+      _phoneCtrl.text = widget.existingPhone!;
+    }
   }
 
   @override

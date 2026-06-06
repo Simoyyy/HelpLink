@@ -8,12 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:helplink/models/user_model.dart';
 import 'package:helplink/screens/beneficiary/location_picker.dart';
 import 'package:helplink/screens/phone_verification_screen.dart';
 import 'package:helplink/services/auth_service.dart';
 import 'package:helplink/services/firestore_service.dart';
 import 'package:helplink/utils/app_theme.dart';
+import 'package:helplink/widgets/otp_input_box.dart';
 
 class BeneficiaryProfileScreen extends StatefulWidget {
   const BeneficiaryProfileScreen({super.key});
@@ -735,13 +737,7 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                             ),
                           ),
                           _divider(),
-                          _profileField(
-                            label: 'Email Address',
-                            value: user.email,
-                            icon: Icons.email_outlined,
-                            enabled: false,
-                            accentColor: AppTheme.primaryPurple,
-                          ),
+                          _emailField(email: user.email, accentColor: AppTheme.primaryPurple),
                           _divider(),
                           _phoneField(user: user, accentColor: AppTheme.primaryPurple),
                           _divider(),
@@ -916,6 +912,341 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
     );
   }
 
+  Widget _emailField({required String email, required Color accentColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Email Address',
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _fieldIcon(Icons.email_outlined,
+                  _isEditing ? accentColor : AppTheme.textMuted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(email,
+                    style: const TextStyle(
+                        fontSize: 14, color: AppTheme.textDark)),
+              ),
+              if (_isEditing)
+                TextButton(
+                  onPressed: () => _showEmailChangeSheet(email, accentColor),
+                  style: TextButton.styleFrom(
+                    foregroundColor: accentColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  child: const Text('Change'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEmailChangeSheet(
+      String currentEmail, Color accentColor) async {
+    final emailCtrl = TextEditingController();
+    final otpKey = GlobalKey<OtpInputBoxState>();
+    String otp = '';
+    bool step2 = false;
+    bool loading = false;
+    String? error;
+
+    final functions =
+        FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+    final authService =
+        Provider.of<AuthService>(context, listen: false);
+    final user = authService.userModel;
+    if (user == null) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                24, 20, 24,
+                MediaQuery.of(ctx).viewInsets.bottom + 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  step2
+                      ? 'Enter Verification Code'
+                      : 'Change Email Address',
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textDark),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  step2
+                      ? 'Enter the 6-digit code sent to ${emailCtrl.text.trim()}'
+                      : 'A verification code will be sent to your new email address.',
+                  style: const TextStyle(
+                      fontSize: 13, color: AppTheme.textMuted),
+                ),
+                const SizedBox(height: 20),
+
+                if (!step2) ...[
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(
+                        fontSize: 14, color: AppTheme.textDark),
+                    decoration: InputDecoration(
+                      prefixIcon: Icon(Icons.email_outlined,
+                          color: accentColor),
+                      hintText: 'Enter new email address',
+                      hintStyle: const TextStyle(
+                          color: AppTheme.textMuted),
+                      helperText:
+                          'Must be different from your current email',
+                      helperStyle:
+                          const TextStyle(fontSize: 11),
+                      filled: true,
+                      fillColor: AppTheme.backgroundGrey,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: accentColor, width: 1.5)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0))),
+                    ),
+                  ),
+                ] else ...[
+                  OtpInputBox(
+                    key: otpKey,
+                    activeColor: accentColor,
+                    onChanged: (v) => setSheet(() => otp = v),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: loading
+                          ? null
+                          : () async {
+                              setSheet(() {
+                                loading = true;
+                                error = null;
+                              });
+                              try {
+                                await functions
+                                    .httpsCallable(
+                                        'sendEmailChangeOTP')
+                                    .call({
+                                  'uid': user.uid,
+                                  'newEmail':
+                                      emailCtrl.text.trim(),
+                                  'name': user.fullName
+                                      .split(' ')
+                                      .first,
+                                });
+                                otpKey.currentState?.clear();
+                                setSheet(() => loading = false);
+                              } on FirebaseFunctionsException catch (e) {
+                                setSheet(() {
+                                  error = e.message ??
+                                      'Failed to resend.';
+                                  loading = false;
+                                });
+                              } catch (_) {
+                                setSheet(() {
+                                  error = 'Failed to resend.';
+                                  loading = false;
+                                });
+                              }
+                            },
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Resend Code'),
+                      style: TextButton.styleFrom(
+                          foregroundColor: accentColor,
+                          textStyle:
+                              const TextStyle(fontSize: 13)),
+                    ),
+                  ),
+                ],
+
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorRed
+                          .withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: AppTheme.errorRed
+                              .withValues(alpha: 0.3)),
+                    ),
+                    child: Text(error!,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.errorRed)),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: loading
+                        ? null
+                        : () async {
+                            if (!step2) {
+                              final newEmail =
+                                  emailCtrl.text.trim();
+                              if (newEmail.isEmpty ||
+                                  !newEmail.contains('@')) {
+                                setSheet(() => error =
+                                    'Enter a valid email address.');
+                                return;
+                              }
+                              if (newEmail == currentEmail) {
+                                setSheet(() => error =
+                                    'New email must be different from your current one.');
+                                return;
+                              }
+                              setSheet(() {
+                                loading = true;
+                                error = null;
+                              });
+                              try {
+                                await functions
+                                    .httpsCallable(
+                                        'sendEmailChangeOTP')
+                                    .call({
+                                  'uid': user.uid,
+                                  'newEmail': newEmail,
+                                  'name': user.fullName
+                                      .split(' ')
+                                      .first,
+                                });
+                                setSheet(() {
+                                  step2 = true;
+                                  loading = false;
+                                });
+                              } on FirebaseFunctionsException catch (e) {
+                                setSheet(() {
+                                  error = e.message ??
+                                      'Failed to send code.';
+                                  loading = false;
+                                });
+                              } catch (_) {
+                                setSheet(() {
+                                  error =
+                                      'Something went wrong.';
+                                  loading = false;
+                                });
+                              }
+                            } else {
+                              if (otp.length < 6) return;
+                              setSheet(() {
+                                loading = true;
+                                error = null;
+                              });
+                              try {
+                                await functions
+                                    .httpsCallable(
+                                        'verifyAndUpdateEmail')
+                                    .call({
+                                  'uid': user.uid,
+                                  'code': otp,
+                                  'newEmail':
+                                      emailCtrl.text.trim(),
+                                });
+                                await authService.loadUserData();
+                                if (ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(
+                                    content: Text(
+                                        'Email updated successfully!'),
+                                    backgroundColor:
+                                        AppTheme.successGreen,
+                                  ));
+                                }
+                              } on FirebaseFunctionsException catch (e) {
+                                setSheet(() {
+                                  error = e.message ??
+                                      'Incorrect code.';
+                                  loading = false;
+                                });
+                              } catch (_) {
+                                setSheet(() {
+                                  error =
+                                      'Something went wrong.';
+                                  loading = false;
+                                });
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(12)),
+                    ),
+                    child: loading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5))
+                        : Text(
+                            step2
+                                ? 'Confirm & Update Email'
+                                : 'Send Verification Code',
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    emailCtrl.dispose();
+  }
+
   Widget _phoneField({required UserModel user, required Color accentColor}) {
     final phone = user.phoneNumber;
     final verified = user.isPhoneVerified;
@@ -973,7 +1304,7 @@ class _BeneficiaryProfileScreenState extends State<BeneficiaryProfileScreen> {
                     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   child: Text(
-                    verified ? 'Change' : (hasPhone ? 'Verify' : 'Set Number'),
+                    hasPhone ? (verified ? 'Change' : 'Verify / Change') : 'Set Number',
                   ),
                 ),
             ],

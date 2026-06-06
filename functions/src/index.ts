@@ -396,6 +396,78 @@ export const checkPasswordResetCode = onCall(
   return { success: true };
 });
 
+// ─── Email Change — OTP to new address ──────────────────────────────────────
+// Step 1: send a code to the NEW email to confirm ownership.
+// Step 2: verify the code, then update Firebase Auth + Firestore atomically.
+
+export const sendEmailChangeOTP = onCall(
+  { secrets: [gmailEmail, gmailPassword], enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
+    const { uid, newEmail, name } = request.data as {
+      uid: string; newEmail: string; name?: string;
+    };
+    if (!uid || !newEmail) throw new HttpsError("invalid-argument", "uid and newEmail are required");
+
+    // Reject if the new email is already registered to another account
+    try {
+      const existing = await admin.auth().getUserByEmail(newEmail.trim().toLowerCase());
+      if (existing.uid !== uid) {
+        throw new HttpsError("already-exists", "This email is already registered to another account.");
+      }
+    } catch (e: any) {
+      if (e instanceof HttpsError) throw e;
+      // auth/user-not-found is expected — email is available
+    }
+
+    const code = generateCode();
+    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000));
+
+    await db.collection("email_change_otps").doc(uid).set({
+      code, newEmail: newEmail.trim().toLowerCase(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt, used: false,
+    });
+
+    const transport = createTransport(gmailEmail.value(), gmailPassword.value());
+    await transport.sendMail({
+      from: `"HelpLink" <${gmailEmail.value()}>`,
+      to: newEmail.trim(),
+      subject: "HelpLink — Confirm Your New Email Address",
+      html: verificationTemplate(code, name ?? "there"),
+    });
+
+    return { success: true };
+  }
+);
+
+export const verifyAndUpdateEmail = onCall(
+  { enforceAppCheck: false, invoker: 'public' },
+  async (request) => {
+    const { uid, code, newEmail } = request.data as {
+      uid: string; code: string; newEmail: string;
+    };
+    if (!uid || !code || !newEmail) throw new HttpsError("invalid-argument", "uid, code, and newEmail are required");
+
+    const snap = await db.collection("email_change_otps").doc(uid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "No code found. Please request a new one.");
+
+    const otp = snap.data()!;
+    if (otp.used) throw new HttpsError("already-exists", "Code already used.");
+    if ((otp.expiresAt as admin.firestore.Timestamp).toDate() < new Date())
+      throw new HttpsError("deadline-exceeded", "Code expired. Please request a new one.");
+    if (otp.code !== code) throw new HttpsError("unauthenticated", "Incorrect code. Please try again.");
+    if (otp.newEmail !== newEmail.trim().toLowerCase())
+      throw new HttpsError("invalid-argument", "Email mismatch.");
+
+    // Update Firebase Auth and Firestore atomically
+    await admin.auth().updateUser(uid, { email: newEmail.trim().toLowerCase() });
+    await db.collection("users").doc(uid).update({ email: newEmail.trim().toLowerCase() });
+    await snap.ref.update({ used: true });
+
+    return { success: true };
+  }
+);
+
 // ─── Phone Change — Email OTP ────────────────────────────────────────────────
 // When a user wants to change their verified phone number they can choose to
 // confirm via email instead of SMS. These two functions handle that path.
