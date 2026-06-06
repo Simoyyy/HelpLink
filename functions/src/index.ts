@@ -641,6 +641,122 @@ async function sendPush(
   }
 }
 
+// ─── Request cancelled → notify the other party ─────────────────────────────
+
+export const onRequestCancelled = onDocumentUpdated(
+  "help_requests/{requestId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const title        = (after.title       as string | undefined) ?? "a request";
+    const cancelledBy  = (after.cancelledBy as string | undefined) ?? "";
+    const beneficiaryId = after.beneficiaryId as string | undefined;
+    const donorId       = after.donorId       as string | undefined;
+
+    if (cancelledBy === "beneficiary" && donorId) {
+      // Beneficiary cancelled → tell the donor
+      const doc = await db.collection("users").doc(donorId).get();
+      const fcm = doc.data()?.fcmToken as string | undefined;
+      if (fcm) await sendPush(
+        fcm,
+        "Request Cancelled",
+        `The beneficiary has cancelled the request "${title}".`,
+        { type: "request_cancelled", requestId: event.params.requestId }
+      );
+    } else if (beneficiaryId) {
+      // Donor or system cancelled → tell the beneficiary
+      const doc = await db.collection("users").doc(beneficiaryId).get();
+      const fcm = doc.data()?.fcmToken as string | undefined;
+      if (fcm) {
+        const byDonor = cancelledBy === "donor";
+        await sendPush(
+          fcm,
+          "Request Cancelled",
+          byDonor
+            ? `Your donor has withdrawn from your request "${title}". It is now open for other donors.`
+            : `Your request "${title}" has been cancelled.`,
+          { type: "request_cancelled", requestId: event.params.requestId }
+        );
+      }
+    }
+  }
+);
+
+// ─── Delivery submitted → notify beneficiary to confirm ──────────────────────
+
+export const onDeliverySubmitted = onDocumentUpdated(
+  "help_requests/{requestId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return;
+    if (after.status !== "pendingConfirmation") return;
+
+    const beneficiaryId = after.beneficiaryId as string | undefined;
+    const title         = (after.title     as string | undefined) ?? "your request";
+    const donorName     = (after.donorName as string | undefined) ?? "Your donor";
+
+    if (!beneficiaryId) return;
+
+    const doc = await db.collection("users").doc(beneficiaryId).get();
+    const fcm = doc.data()?.fcmToken as string | undefined;
+    if (!fcm) return;
+
+    await sendPush(
+      fcm,
+      "Delivery Submitted 📦",
+      `${donorName} has submitted delivery for "${title}". Please confirm receipt or scan the QR code.`,
+      { type: "delivery_submitted", requestId: event.params.requestId }
+    );
+  }
+);
+
+// ─── IC verification result → notify user ────────────────────────────────────
+
+export const onICVerificationChanged = onDocumentUpdated(
+  "users/{userId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!before || !after) return;
+
+    const wasVerified  = before.isICVerified        as boolean | undefined;
+    const nowVerified  = after.isICVerified         as boolean | undefined;
+    const wasPending   = before.icPendingVerification as boolean | undefined;
+    const nowPending   = after.icPendingVerification  as boolean | undefined;
+    const fcm          = after.fcmToken as string | undefined;
+    const firstName    = ((after.fullName as string | undefined) ?? "").split(" ")[0] || "there";
+
+    if (!fcm) return;
+
+    // ── Approved ─────────────────────────────────────────────────────────────
+    if (!wasVerified && nowVerified) {
+      await sendPush(
+        fcm,
+        "IC Verified ✓",
+        `Hi ${firstName}! Your IC has been verified. You now have full access to HelpLink.`,
+        { type: "ic_verified", userId: event.params.userId }
+      );
+      return;
+    }
+
+    // ── Rejected: was pending, no longer pending, still not verified ──────────
+    if (wasPending && !nowPending && !nowVerified) {
+      await sendPush(
+        fcm,
+        "IC Verification Unsuccessful",
+        `Hi ${firstName}, your IC could not be verified. Please re-submit a clear photo of your blue Malaysian IC card.`,
+        { type: "ic_rejected", userId: event.params.userId }
+      );
+    }
+  }
+);
+
 // ─── New chat message → notify receiver ──────────────────────────────────────
 
 export const onChatMessageCreated = onDocumentCreated(
