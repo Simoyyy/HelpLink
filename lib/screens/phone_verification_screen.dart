@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:helplink/utils/app_theme.dart';
 import 'package:helplink/widgets/otp_input_box.dart';
 
@@ -44,6 +45,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   final _oldOtpKey = GlobalKey<OtpInputBoxState>();
   // New phone entry
   final _phoneCtrl = TextEditingController();
+  String _completePhone = '';     // E.164 full number updated by IntlPhoneField
+  String _initialCountryCode = 'MY';
+  String? _initialLocalNumber;
 
   // SMS OTP (Firebase Phone Auth)
   String _smsOtp = '';
@@ -59,10 +63,28 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   void initState() {
     super.initState();
     _step = widget.isChange ? _Step.chooseMethod : _Step.enterPhone;
-    // Pre-fill existing number so user can verify it directly, or clear to enter a new one
     if (!widget.isChange && widget.existingPhone != null) {
-      _phoneCtrl.text = widget.existingPhone!;
+      final parsed = _parseExistingPhone(widget.existingPhone!);
+      _initialCountryCode = parsed.$1;
+      _initialLocalNumber = parsed.$2;
+      _completePhone = widget.existingPhone!;
     }
+  }
+
+  /// Splits a stored E.164 number into (ISO country code, local number).
+  (String, String) _parseExistingPhone(String phone) {
+    const Map<String, String> codes = {
+      '+60': 'MY', '+65': 'SG', '+62': 'ID', '+63': 'PH',
+      '+66': 'TH', '+673': 'BN', '+44': 'GB', '+1': 'US',
+      '+61': 'AU', '+91': 'IN', '+86': 'CN', '+81': 'JP',
+      '+82': 'KR', '+971': 'AE', '+966': 'SA',
+    };
+    for (final entry in codes.entries) {
+      if (phone.startsWith(entry.key)) {
+        return (entry.value, phone.substring(entry.key.length));
+      }
+    }
+    return ('MY', phone.replaceFirst(RegExp(r'^\+\d{1,4}'), ''));
   }
 
   @override
@@ -153,15 +175,13 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   // ── Step 2: enter new phone number ─────────────────────────────────────────
 
   Future<void> _sendSmsOtp() async {
-    final phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) { _setError('Enter a phone number.'); return; }
-    if (!phone.startsWith('+')) {
-      _setError('Include the country code, e.g. +601...');
+    if (_completePhone.isEmpty || !_completePhone.startsWith('+')) {
+      _setError('Please select a country and enter your phone number.');
       return;
     }
     _setLoading(true);
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: phone,
+      phoneNumber: _completePhone,
       timeout: const Duration(seconds: 60),
       verificationCompleted: (PhoneAuthCredential credential) async {
         await _verifyWithCredential(credential);
@@ -201,12 +221,12 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       // Link temporarily to prove the user owns this number, then unlink.
       await user.linkWithCredential(credential);
       await user.unlink('phone');
-      if (mounted) widget.onVerified(_phoneCtrl.text.trim());
+      if (mounted) widget.onVerified(_completePhone);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'provider-already-linked') {
         // The user's account already has this phone linked — treat as verified.
         try { await FirebaseAuth.instance.currentUser?.unlink('phone'); } catch (_) {}
-        if (mounted) widget.onVerified(_phoneCtrl.text.trim());
+        if (mounted) widget.onVerified(_completePhone);
         return;
       }
       if (e.code == 'credential-already-in-use') {
@@ -425,22 +445,21 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Enter your phone number with the country code.',
+        const Text('Select your country and enter your phone number.',
             style: TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.5)),
         const SizedBox(height: 8),
         const Text('A verification code will be sent to this number via SMS.',
             style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
         const SizedBox(height: 28),
-        TextField(
+        IntlPhoneField(
           controller: _phoneCtrl,
+          initialCountryCode: _initialCountryCode,
+          initialValue: _initialLocalNumber,
           keyboardType: TextInputType.phone,
           style: const TextStyle(fontSize: 15, color: AppTheme.textDark),
           decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.phone_android_outlined, color: AppTheme.primaryBlue),
-            hintText: '+601XXXXXXXX',
+            hintText: 'Phone number',
             hintStyle: const TextStyle(color: AppTheme.textMuted),
-            helperText: 'Start with your country code, e.g. +60 for Malaysia',
-            helperStyle: const TextStyle(fontSize: 11),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -455,7 +474,14 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
+            counterText: '',
           ),
+          onChanged: (phone) {
+            setState(() => _completePhone = phone.completeNumber);
+          },
+          languageCode: 'en',
+          dropdownIconPosition: IconPosition.trailing,
+          dropdownIcon: const Icon(Icons.arrow_drop_down, color: AppTheme.textMuted),
         ),
         const SizedBox(height: 32),
         SizedBox(
@@ -482,7 +508,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Enter the 6-digit SMS code sent to ${_phoneCtrl.text.trim()}.',
+        Text('Enter the 6-digit SMS code sent to $_completePhone.',
             style: const TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.5)),
         const SizedBox(height: 28),
         OtpInputBox(
